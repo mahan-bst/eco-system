@@ -75,6 +75,7 @@ with a white ring and its vision circle. Click empty space to deselect.
 | left click | select a creature / open its brain |
 | right click | drop a burst of food at the cursor |
 | `F` | follow cam — the camera glides in and tracks the selected creature |
+| `L` | leaderboard — the oldest living prey and predators; click a row to follow them |
 | mouse wheel | zoom while following |
 | `Esc` | deselect |
 

@@ -21,6 +21,7 @@
 #include "Config.hpp"
 #include "Charts.hpp"
 #include "History.hpp"
+#include "Leaderboard.hpp"
 #include "SaveState.hpp"
 #include "Simulation.hpp"
 #include "SliderPanel.hpp"
@@ -320,7 +321,7 @@ static void drawPanel(sf::RenderWindow& window, const Simulation& sim,
                              "left-click  inspect a brain      right-click  drop food",
                              12, { x, cy + 54.f }, pal::textDim));
         window.draw(makeText(*font,
-                             "F  follow cam      scroll  zoom      Esc  deselect",
+                             "F  follow cam      L  leaderboard      scroll  zoom      Esc  deselect",
                              12, { x, cy + 72.f }, pal::textDim));
     }
 }
@@ -378,6 +379,10 @@ int main()
                          cfg::WORLD_Y + cfg::WORLD_H - tuning.height() - 12.f });
 
     const sf::Vector2f brainViewPos(cfg::WORLD_X + 12.f, cfg::WORLD_Y + 12.f);
+
+    Leaderboard leaderboard;
+    leaderboard.setPosition({ cfg::WORLD_X + cfg::WORLD_W - 252.f - 12.f,
+                              cfg::WORLD_Y + 12.f });
 
     Selection selection;
     bool paused = false;
@@ -437,6 +442,9 @@ int main()
                     break;
                 case sf::Keyboard::Key::V:
                     showVision = !showVision;
+                    break;
+                case sf::Keyboard::Key::L:
+                    leaderboard.visible = !leaderboard.visible;
                     break;
                 case sf::Keyboard::Key::T:
                     tuning.visible = !tuning.visible;
@@ -499,12 +507,31 @@ int main()
 
                 if (mb->button == sf::Mouse::Button::Left)
                 {
-                    if (!tuning.onMousePressed(pix) && !onBrainView && inWorld)
+                    std::uint64_t lbId = 0;
+                    bool lbPred = false;
+                    if (tuning.onMousePressed(pix))
+                    {
+                        // sliders ate the click
+                    }
+                    else if (leaderboard.onMousePressed(pix, lbId, lbPred))
+                    {
+                        if (lbId != 0)              // a row: follow that creature
+                        {
+                            selection.id = lbId;
+                            selection.isPred = lbPred;
+                            follow = true;
+                            setStatus("follow cam ON");
+                        }
+                    }
+                    else if (!onBrainView && inWorld)
                         selection.pick(sim, p);     // empty space deselects
                 }
                 else if (mb->button == sf::Mouse::Button::Right)
                 {
-                    if (inWorld && !onBrainView)
+                    std::uint64_t d1 = 0;
+                    bool d2 = false;
+                    if (inWorld && !onBrainView &&
+                        !leaderboard.onMousePressed(pix, d1, d2))
                         sim.spawnFoodBurst(p, 20);
                 }
             }
@@ -535,6 +562,9 @@ int main()
         }
 
         const Animal* selected = selection.resolve(sim);
+
+        if (leaderboard.visible)
+            leaderboard.update(sim);
 
         // the creature we were filming just vanished — break the bad news
         if (hadSelection && !selected && follow)
@@ -652,6 +682,7 @@ int main()
             BrainView::draw(window, brainViewPos, *selected, selection.isPred,
                             hasFont ? &font : nullptr);
 
+        leaderboard.draw(window, hasFont ? &font : nullptr, selection.id);
         tuning.draw(window, hasFont ? &font : nullptr);
 
         window.display();
