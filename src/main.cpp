@@ -22,6 +22,7 @@
 #include "Charts.hpp"
 #include "History.hpp"
 #include "Leaderboard.hpp"
+#include "Lineage.hpp"
 #include "SaveState.hpp"
 #include "Simulation.hpp"
 #include "SliderPanel.hpp"
@@ -107,7 +108,8 @@ struct Selection
 // ----- world rendering --------------------------------------------------------
 
 static void drawWorld(sf::RenderWindow& window, const Simulation& sim,
-                      bool showVision, const Animal* selected, bool selectedIsPred)
+                      bool showVision, bool lineageColor,
+                      const Animal* selected, bool selectedIsPred)
 {
     sf::RectangleShape bg({ cfg::WORLD_W, cfg::WORLD_H });
     bg.setFillColor(pal::worldBg);
@@ -171,14 +173,16 @@ static void drawWorld(sf::RenderWindow& window, const Simulation& sim,
     eye.setOrigin({ er, er });
     for (const auto& a : sim.preyList())
     {
-        const float bright = 0.45f + 0.55f * clampf(a.energy / cfg::PREY.capacity, 0.f, 1.f);
+        const float ef = clampf(a.energy / cfg::PREY.capacity, 0.f, 1.f);
+        const sf::Color col = lineageColor ? lineage::color(a.brain, ef)
+                                           : scaled(pal::prey, 0.45f + 0.55f * ef);
         body.setPosition(a.pos);
-        body.setFillColor(scaled(pal::prey, bright));
+        body.setFillColor(col);
         window.draw(body);
 
         const sf::Vector2f dir(std::cos(a.heading), std::sin(a.heading));
         eye.setPosition(a.pos + dir * (cfg::PREY.size * 0.55f));
-        eye.setFillColor(scaled(pal::prey, bright * 0.45f));
+        eye.setFillColor(scaled(col, 0.45f));
         window.draw(eye);
     }
 
@@ -190,10 +194,12 @@ static void drawWorld(sf::RenderWindow& window, const Simulation& sim,
     tri.setPoint(2, { -1.0f * s, -0.95f * s });
     for (const auto& a : sim.predList())
     {
-        const float bright = 0.45f + 0.55f * clampf(a.energy / cfg::PRED.capacity, 0.f, 1.f);
+        const float ef = clampf(a.energy / cfg::PRED.capacity, 0.f, 1.f);
+        const sf::Color col = lineageColor ? lineage::color(a.brain, ef)
+                                           : scaled(pal::predator, 0.45f + 0.55f * ef);
         tri.setPosition(a.pos);
         tri.setRotation(sf::radians(a.heading));
-        tri.setFillColor(scaled(pal::predator, bright));
+        tri.setFillColor(col);
         window.draw(tri);
     }
 
@@ -242,7 +248,7 @@ static void drawWorld(sf::RenderWindow& window, const Simulation& sim,
 static void drawPanel(sf::RenderWindow& window, const Simulation& sim,
                       const History& history, const sf::Font* font,
                       bool paused, int speedMult, bool showVision, bool showTuning,
-                      const std::string& status)
+                      bool lineageColor, const std::string& status)
 {
     const float x = cfg::PANEL_X;
     char buf[128];
@@ -315,8 +321,9 @@ static void drawPanel(sf::RenderWindow& window, const Simulation& sim,
                              ".  single step (paused)      R  restart      S / O  save / load",
                              12, { x, cy + 18.f }, pal::textDim));
         std::snprintf(buf, sizeof(buf),
-                      "V  vision rings (%s)      T  tuning sliders (%s)      D  defaults",
-                      showVision ? "on" : "off", showTuning ? "on" : "off");
+                      "V  vision (%s)   T  tuning (%s)   D  defaults   C  lineage colour (%s)",
+                      showVision ? "on" : "off", showTuning ? "on" : "off",
+                      lineageColor ? "on" : "off");
         window.draw(makeText(*font, buf, 12, { x, cy + 36.f }, pal::textDim));
         window.draw(makeText(*font,
                              "left-click  inspect a brain      right-click  drop food",
@@ -388,6 +395,7 @@ int main()
     Selection selection;
     bool paused = false;
     bool showVision = false;
+    bool lineageColor = false;   // C: colour creatures by brain similarity
     int  speedIdx = 0;
 
     // ----- follow cam ("nature documentary mode") -----
@@ -443,6 +451,11 @@ int main()
                     break;
                 case sf::Keyboard::Key::V:
                     showVision = !showVision;
+                    break;
+                case sf::Keyboard::Key::C:
+                    lineageColor = !lineageColor;
+                    setStatus(lineageColor ? "lineage colour - tribes by brain"
+                                           : "energy colour");
                     break;
                 case sf::Keyboard::Key::L:
                     leaderboard.visible = !leaderboard.visible;
@@ -625,7 +638,7 @@ int main()
         window.clear(pal::background);
 
         window.setView(worldView);
-        drawWorld(window, sim, showVision, selected, selection.isPred);
+        drawWorld(window, sim, showVision, lineageColor, selected, selection.isPred);
         window.setView(window.getDefaultView());
 
         sf::RectangleShape border({ cfg::WORLD_W, cfg::WORLD_H });
@@ -683,7 +696,7 @@ int main()
 
         drawPanel(window, sim, history, hasFont ? &font : nullptr,
                   paused, cfg::SPEED_STEPS[speedIdx], showVision, tuning.visible,
-                  status);
+                  lineageColor, status);
 
         if (selected)
             BrainView::draw(window, brainViewPos, *selected, selection.isPred,

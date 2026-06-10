@@ -68,6 +68,7 @@ with a white ring and its vision circle. Click empty space to deselect.
 | `+` / `-` (or `↑` / `↓`) | time speed ×1, ×2, ×4, ×8, ×16, ×32 |
 | `.` | single step while paused |
 | `V` | show vision rings for everyone |
+| `C` | lineage colour — tint each creature by how similar its brain is to others |
 | `T` | tuning sliders — drag to change parameters while it runs |
 | `D` | reset all tuning sliders to the balanced defaults |
 | `S` | save the world to a `.eco` file (a file dialog asks where) |
@@ -117,6 +118,17 @@ even hour-long runs fit):
 Good talking points for a presentation: at t = 0 everyone spins in circles
 (random brains); within a few minutes prey visibly beeline to food; later,
 prey start veering away when a predator closes in.
+
+## Lineage colour (`C`)
+
+Press `C` to colour every creature by **brain similarity** instead of energy.
+Each brain's weight vector is projected onto two fixed random directions and
+the angle becomes a hue (a locality-sensitive hash): near-identical brains get
+near-identical colours. Since offspring are near-copies of their parent, a
+family line shows up as a single tribe colour — and when one lineage out-breeds
+the rest, you watch the whole population converge to its colour in real time.
+A sudden splash of a new colour that spreads is a beneficial mutation taking
+over. Brightness still encodes energy, so starving creatures dim out as before.
 
 ## Building
 
