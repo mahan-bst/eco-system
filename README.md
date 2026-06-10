@@ -26,11 +26,11 @@ so the experiment never dead-ends.
 
 ## The brain
 
-A fixed-topology feed-forward network, small enough to read on screen but
-big enough to produce real behaviour:
+A fixed-topology feed-forward network with recurrent memory, small enough to
+read on screen but big enough to produce real behaviour:
 
 ```
-10 inputs  →  8 hidden (tanh)  →  2 outputs
+14 inputs  →  10 hidden (tanh)  →  4 outputs
 ```
 
 All senses are **egocentric** (relative to the creature's own heading), so a
@@ -43,11 +43,13 @@ brain works identically anywhere on the map:
 | 6 | energy | own energy / capacity |
 | 7 | wall | proximity of the nearest wall |
 | 8–9 | centre sin / cos | direction of the world centre |
-| | **Outputs** | **turn** (−1..1, tanh) and **throttle** (0..1, sigmoid) |
+| 10–11 | relative velocity fwd / side | how the key moving agent (the predator for prey, the prey for predators) moves relative to us — enables **interception** and **dodging** |
+| 12–13 | memory 1 / 2 | the brain's own memory outputs from the previous tick |
+| | **Outputs** | **turn** (−1..1), **throttle** (0..1), and **memory 1 / 2** (fed back as inputs next tick — short-term state) |
 
 Mutation adds gaussian noise to every weight, plus a 2 % chance per weight of
-a complete rewire. There is no crossover and no back-propagation — pure
-selection.
+a complete rewire. Children start with a blank memory. There is no crossover
+and no back-propagation — pure selection.
 
 ## The brain viewer
 
@@ -94,9 +96,11 @@ one back. Very handy for presentations: evolve a competent population at ×32
 beforehand, save it, and open the trained world live instead of waiting.
 Loading validates the file and leaves the running world untouched if the file
 is corrupt or from an incompatible build (the brain topology is checked).
-Saves from older versions of the format still load — fields that did not
-exist yet (e.g. the vision/speed sliders) simply get their default values,
-and re-saving writes the current format.
+Saves from older versions of the *format* still load — fields that did not
+exist yet simply get their default values, and re-saving writes the current
+format. The exception is a change of **brain topology** (like the velocity +
+memory upgrade): older brains have a different number of weights, so those
+files are rejected as incompatible rather than loaded wrong.
 
 ## The charts
 

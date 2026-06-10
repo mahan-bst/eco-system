@@ -43,6 +43,9 @@ namespace cfg
     inline constexpr int PREY_FLOOR = 20;
     inline constexpr int PRED_FLOOR = 6;
 
+    // normalisation for the relative-velocity brain inputs (px/s -> ~[-1,1])
+    inline constexpr float VEL_NORM = 200.f;
+
     // ----- evolution ----------------------------------------------------------
     inline constexpr float BRAIN_INIT_SIGMA = 0.5f;   // fresh random weights
     inline constexpr float MUTATION_SIGMA   = 0.08f;  // gaussian noise per weight

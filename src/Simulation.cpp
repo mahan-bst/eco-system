@@ -28,6 +28,19 @@ namespace
         in[2] = std::cos(rel);
     }
 
+    // Inputs 10/11: how the key moving agent (the predator for prey, the prey
+    // for predators) moves relative to us, expressed in our own frame as
+    // forward / lateral components. This is what makes interception and
+    // dodging learnable instead of pure tail-chasing.
+    void writeVelocity(float* in, const Animal& a, const Animal& other)
+    {
+        const sf::Vector2f rv = other.vel - a.vel;
+        const sf::Vector2f fwd(std::cos(a.heading), std::sin(a.heading));
+        const sf::Vector2f side(-fwd.y, fwd.x);
+        in[10] = clampf((rv.x * fwd.x + rv.y * fwd.y) / cfg::VEL_NORM, -1.f, 1.f);
+        in[11] = clampf((rv.x * side.x + rv.y * side.y) / cfg::VEL_NORM, -1.f, 1.f);
+    }
+
     void writeCommonSenses(float* in, const Animal& a, const cfg::SpeciesCfg& s)
     {
         in[6] = clampf(a.energy / s.capacity, 0.f, 1.f);
@@ -186,7 +199,10 @@ void Simulation::updatePrey(float dt, std::vector<Animal>& babies)
                 if (d2 < bestD2) { bestD2 = d2; threat = &p; }
             });
             if (threat)
+            {
                 writeChannel(in + 3, a, threat->pos, std::sqrt(bestD2), vis);
+                writeVelocity(in, a, *threat);   // see the predator's movement
+            }
         }
 
         writeCommonSenses(in, a, S);
@@ -236,7 +252,10 @@ void Simulation::updatePredators(float dt, std::vector<Animal>& babies)
                 if (d2 < bestD2) { bestD2 = d2; targetIdx = j; }
             });
             if (targetIdx >= 0)
+            {
                 writeChannel(in, a, m_prey[targetIdx].pos, std::sqrt(bestD2), vis);
+                writeVelocity(in, a, m_prey[targetIdx]);   // lead the target
+            }
         }
 
         // channel B: nearest rival predator (competition awareness)
@@ -290,7 +309,9 @@ void Simulation::act(Animal& a, const cfg::SpeciesCfg& s, float dt)
     a.heading = wrapAngle(a.heading + a.brain.turn() * s.turnRate * dt);
 
     const float spd = throttle * cfg::maxSpeedOf(s);
-    a.pos += sf::Vector2f(std::cos(a.heading), std::sin(a.heading)) * (spd * dt);
+    const sf::Vector2f dir(std::cos(a.heading), std::sin(a.heading));
+    a.vel  = dir * spd;
+    a.pos += dir * (spd * dt);
     a.pos.x = clampf(a.pos.x, s.size, cfg::WORLD_W - s.size);
     a.pos.y = clampf(a.pos.y, s.size, cfg::WORLD_H - s.size);
 
@@ -360,9 +381,12 @@ namespace
     // version history (the last byte of the magic):
     //   2 - first brain-era format
     //   3 - adds the vision/speed tunables; older files load with defaults
-    constexpr char SAVE_MAGIC[8] = { 'E','C','O','S','I','M','0','3' };
+    //   4 - animal records gain velocity + brain memory state
+    //       (v2/v3 brains had a different topology, so the paramCount check
+    //        rejects them anyway)
+    constexpr char SAVE_MAGIC[8] = { 'E','C','O','S','I','M','0','4' };
     constexpr int  SAVE_VERSION_MIN = 2;
-    constexpr int  SAVE_VERSION_MAX = 3;
+    constexpr int  SAVE_VERSION_MAX = 4;
 
     template <class T>
     void wr(std::ostream& out, const T& v)
@@ -381,18 +405,30 @@ namespace
     {
         wr(out, a.id);
         wr(out, a.pos.x); wr(out, a.pos.y);
+        wr(out, a.vel.x); wr(out, a.vel.y);
         wr(out, a.heading);
         wr(out, a.energy);
         wr(out, a.age);
+        wr(out, a.brain.memory()[0]);
+        wr(out, a.brain.memory()[1]);
         for (float w : a.brain.weights()) wr(out, w);
     }
 
-    bool readAnimal(std::istream& in, Animal& a)
+    bool readAnimal(std::istream& in, Animal& a, int version)
     {
         if (!rd(in, a.id) ||
-            !rd(in, a.pos.x) || !rd(in, a.pos.y) ||
-            !rd(in, a.heading) || !rd(in, a.energy) || !rd(in, a.age))
+            !rd(in, a.pos.x) || !rd(in, a.pos.y))
             return false;
+        if (version >= 4 && (!rd(in, a.vel.x) || !rd(in, a.vel.y)))
+            return false;
+        if (!rd(in, a.heading) || !rd(in, a.energy) || !rd(in, a.age))
+            return false;
+        if (version >= 4)
+        {
+            float m0 = 0.f, m1 = 0.f;
+            if (!rd(in, m0) || !rd(in, m1)) return false;
+            a.brain.setMemory(m0, m1);
+        }
         std::vector<float> w(static_cast<std::size_t>(Brain::paramCount()));
         for (float& x : w)
             if (!rd(in, x)) return false;
@@ -401,13 +437,14 @@ namespace
         return true;
     }
 
-    bool readAnimals(std::istream& in, std::vector<Animal>& out, std::uint32_t maxCount)
+    bool readAnimals(std::istream& in, std::vector<Animal>& out,
+                     std::uint32_t maxCount, int version)
     {
         std::uint32_t n = 0;
         if (!rd(in, n) || n > maxCount) return false;
         out.resize(n);
         for (auto& a : out)
-            if (!readAnimal(in, a)) return false;
+            if (!readAnimal(in, a, version)) return false;
         return true;
     }
 }
@@ -485,8 +522,8 @@ bool Simulation::deserialize(std::istream& in)
     }
 
     std::vector<Animal> prey, pred;
-    if (!readAnimals(in, prey, 100000)) return false;
-    if (!readAnimals(in, pred, 100000)) return false;
+    if (!readAnimals(in, prey, 100000, version)) return false;
+    if (!readAnimals(in, pred, 100000, version)) return false;
 
     // commit
     cfg::tune    = tune;

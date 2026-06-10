@@ -15,6 +15,8 @@ Brain::Brain()
 Brain Brain::offspring() const
 {
     Brain child = *this;
+    child.m_mem[0] = 0.f;            // a newborn starts with a blank memory
+    child.m_mem[1] = 0.f;
     for (float& w : child.m_w)
     {
         w += nrand(0.f, cfg::tune.mutationSigma);
@@ -29,6 +31,10 @@ void Brain::think(const float (&inputs)[IN])
 {
     for (int i = 0; i < IN; ++i) m_in[i] = inputs[i];
 
+    // recurrence: the last two inputs are our own memory from last tick
+    m_in[IN - 2] = m_mem[0];
+    m_in[IN - 1] = m_mem[1];
+
     for (int h = 0; h < HID; ++h)
     {
         float sum = b1(h);
@@ -37,11 +43,15 @@ void Brain::think(const float (&inputs)[IN])
         m_hid[h] = std::tanh(sum);
     }
 
-    float t = b2(0);
-    for (int h = 0; h < HID; ++h) t += w2(0, h) * m_hid[h];
-    m_out[0] = std::tanh(t);                       // turn: -1..1
+    for (int o = 0; o < OUT; ++o)
+    {
+        float sum = b2(o);
+        for (int h = 0; h < HID; ++h)
+            sum += w2(o, h) * m_hid[h];
+        // throttle is the only 0..1 output; everything else is tanh
+        m_out[o] = (o == 1) ? 1.f / (1.f + std::exp(-sum)) : std::tanh(sum);
+    }
 
-    float s = b2(1);
-    for (int h = 0; h < HID; ++h) s += w2(1, h) * m_hid[h];
-    m_out[1] = 1.f / (1.f + std::exp(-s));         // throttle: 0..1
+    m_mem[0] = m_out[2];   // remembered until the next think()
+    m_mem[1] = m_out[3];
 }

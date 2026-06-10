@@ -17,14 +17,16 @@ namespace
     const char* PREY_INPUTS[Brain::IN] = {
         "food", "food sin", "food cos",
         "danger", "dng sin", "dng cos",
-        "energy", "wall", "ctr sin", "ctr cos"
+        "energy", "wall", "ctr sin", "ctr cos",
+        "dng vel fw", "dng vel sd", "mem 1", "mem 2"
     };
     const char* PRED_INPUTS[Brain::IN] = {
         "prey", "prey sin", "prey cos",
         "rival", "rvl sin", "rvl cos",
-        "energy", "wall", "ctr sin", "ctr cos"
+        "energy", "wall", "ctr sin", "ctr cos",
+        "prey vel fw", "prey vel sd", "mem 1", "mem 2"
     };
-    const char* OUTPUTS[Brain::OUT] = { "turn", "speed" };
+    const char* OUTPUTS[Brain::OUT] = { "turn", "speed", "mem 1", "mem 2" };
 
     sf::Color scaledColor(sf::Color c, float f)
     {
@@ -84,18 +86,19 @@ void BrainView::draw(sf::RenderTarget& rt, sf::Vector2f pos, const Animal& a,
     // ----- node layout --------------------------------------------------------
     const float top = pos.y + 60.f;
     const float inX = pos.x + 104.f, hidX = pos.x + 252.f, outX = pos.x + 352.f;
-    const float inSpan = 28.f * (Brain::IN - 1);   // 252
+    const float inSpan = 26.f * (Brain::IN - 1);   // 338
 
     sf::Vector2f inP[Brain::IN], hidP[Brain::HID], outP[Brain::OUT];
     for (int i = 0; i < Brain::IN; ++i)
-        inP[i] = { inX, top + 28.f * float(i) };
+        inP[i] = { inX, top + 26.f * float(i) };
 
     const float hidTop = top + (inSpan - 30.f * (Brain::HID - 1)) / 2.f;
     for (int h = 0; h < Brain::HID; ++h)
         hidP[h] = { hidX, hidTop + 30.f * float(h) };
 
     for (int o = 0; o < Brain::OUT; ++o)
-        outP[o] = { outX, top + inSpan / 2.f + (o == 0 ? -32.f : 32.f) };
+        outP[o] = { outX, top + inSpan / 2.f +
+                          (float(o) - (Brain::OUT - 1) / 2.f) * 52.f };
 
     // ----- connections (drawn first, under the nodes) --------------------------
     // colour = sign of the live signal (weight x source activation),

@@ -17,6 +17,7 @@ struct Animal
 {
     std::uint64_t id = 0;     // stable identity (used by the selection UI)
     sf::Vector2f pos;
+    sf::Vector2f vel;         // last tick's velocity (sensed by other animals)
     float heading = 0.f;      // radians
     float energy  = 0.f;
     float age     = 0.f;      // seconds alive
