@@ -151,6 +151,7 @@ void Simulation::rebuildGrids()
 void Simulation::updatePrey(float dt, std::vector<Animal>& babies)
 {
     const auto& S = cfg::PREY;
+    const float vis = cfg::tune.preyVision;   // slider-controlled sense radius
 
     for (auto& a : m_prey)
     {
@@ -161,23 +162,23 @@ void Simulation::updatePrey(float dt, std::vector<Animal>& babies)
 
         // channel A: nearest food
         {
-            float bestD2 = S.vision * S.vision;
+            float bestD2 = vis * vis;
             int best = -1;
-            m_foodGrid.query(a.pos, S.vision, [&](int j)
+            m_foodGrid.query(a.pos, vis, [&](int j)
             {
                 if (!m_food[j].alive) return;
                 const float d2 = dist2(a.pos, m_food[j].pos);
                 if (d2 < bestD2) { bestD2 = d2; best = j; }
             });
             if (best >= 0)
-                writeChannel(in, a, m_food[best].pos, std::sqrt(bestD2), S.vision);
+                writeChannel(in, a, m_food[best].pos, std::sqrt(bestD2), vis);
         }
 
         // channel B: nearest predator
         {
-            float bestD2 = S.vision * S.vision;
+            float bestD2 = vis * vis;
             const Animal* threat = nullptr;
-            m_predGrid.query(a.pos, S.vision, [&](int j)
+            m_predGrid.query(a.pos, vis, [&](int j)
             {
                 const Animal& p = m_pred[j];
                 if (!p.alive) return;
@@ -185,7 +186,7 @@ void Simulation::updatePrey(float dt, std::vector<Animal>& babies)
                 if (d2 < bestD2) { bestD2 = d2; threat = &p; }
             });
             if (threat)
-                writeChannel(in + 3, a, threat->pos, std::sqrt(bestD2), S.vision);
+                writeChannel(in + 3, a, threat->pos, std::sqrt(bestD2), vis);
         }
 
         writeCommonSenses(in, a, S);
@@ -215,6 +216,7 @@ void Simulation::updatePrey(float dt, std::vector<Animal>& babies)
 void Simulation::updatePredators(float dt, std::vector<Animal>& babies)
 {
     const auto& S = cfg::PRED;
+    const float vis = cfg::tune.predVision;   // slider-controlled sense radius
 
     for (auto& a : m_pred)
     {
@@ -226,22 +228,22 @@ void Simulation::updatePredators(float dt, std::vector<Animal>& babies)
         // channel A: nearest prey (this is dinner)
         int targetIdx = -1;
         {
-            float bestD2 = S.vision * S.vision;
-            m_preyGrid.query(a.pos, S.vision, [&](int j)
+            float bestD2 = vis * vis;
+            m_preyGrid.query(a.pos, vis, [&](int j)
             {
                 if (!m_prey[j].alive) return;
                 const float d2 = dist2(a.pos, m_prey[j].pos);
                 if (d2 < bestD2) { bestD2 = d2; targetIdx = j; }
             });
             if (targetIdx >= 0)
-                writeChannel(in, a, m_prey[targetIdx].pos, std::sqrt(bestD2), S.vision);
+                writeChannel(in, a, m_prey[targetIdx].pos, std::sqrt(bestD2), vis);
         }
 
         // channel B: nearest rival predator (competition awareness)
         {
-            float bestD2 = S.vision * S.vision;
+            float bestD2 = vis * vis;
             const Animal* rival = nullptr;
-            m_predGrid.query(a.pos, S.vision, [&](int j)
+            m_predGrid.query(a.pos, vis, [&](int j)
             {
                 const Animal& p = m_pred[j];
                 if (!p.alive || p.id == a.id) return;
@@ -249,7 +251,7 @@ void Simulation::updatePredators(float dt, std::vector<Animal>& babies)
                 if (d2 < bestD2) { bestD2 = d2; rival = &p; }
             });
             if (rival)
-                writeChannel(in + 3, a, rival->pos, std::sqrt(bestD2), S.vision);
+                writeChannel(in + 3, a, rival->pos, std::sqrt(bestD2), vis);
         }
 
         writeCommonSenses(in, a, S);
@@ -287,7 +289,7 @@ void Simulation::act(Animal& a, const cfg::SpeciesCfg& s, float dt)
 
     a.heading = wrapAngle(a.heading + a.brain.turn() * s.turnRate * dt);
 
-    const float spd = throttle * s.maxSpeed;
+    const float spd = throttle * cfg::maxSpeedOf(s);
     a.pos += sf::Vector2f(std::cos(a.heading), std::sin(a.heading)) * (spd * dt);
     a.pos.x = clampf(a.pos.x, s.size, cfg::WORLD_W - s.size);
     a.pos.y = clampf(a.pos.y, s.size, cfg::WORLD_H - s.size);
@@ -355,7 +357,12 @@ void Simulation::compact(std::vector<Animal>& babyPrey, std::vector<Animal>& bab
 
 namespace
 {
-    constexpr char SAVE_MAGIC[8] = { 'E','C','O','S','I','M','0','2' };
+    // version history (the last byte of the magic):
+    //   2 - first brain-era format
+    //   3 - adds the vision/speed tunables; older files load with defaults
+    constexpr char SAVE_MAGIC[8] = { 'E','C','O','S','I','M','0','3' };
+    constexpr int  SAVE_VERSION_MIN = 2;
+    constexpr int  SAVE_VERSION_MAX = 3;
 
     template <class T>
     void wr(std::ostream& out, const T& v)
@@ -416,6 +423,10 @@ void Simulation::serialize(std::ostream& out) const
     wr(out, cfg::tune.preyCostMul);
     wr(out, cfg::tune.predCostMul);
     wr(out, cfg::tune.predGainMul);
+    wr(out, cfg::tune.preyVision);
+    wr(out, cfg::tune.preySpeed);
+    wr(out, cfg::tune.predVision);
+    wr(out, cfg::tune.predSpeed);
 
     wr(out, m_time);
     wr(out, m_foodAccum);
@@ -438,18 +449,27 @@ bool Simulation::deserialize(std::istream& in)
 {
     char magic[8];
     in.read(magic, sizeof magic);
-    if (!in || std::memcmp(magic, SAVE_MAGIC, sizeof magic) != 0) return false;
+    if (!in || std::memcmp(magic, SAVE_MAGIC, 7) != 0) return false;   // "ECOSIM0"
+    const int version = magic[7] - '0';
+    if (version < SAVE_VERSION_MIN || version > SAVE_VERSION_MAX) return false;
 
     std::uint32_t params = 0;
     if (!rd(in, params) || params != std::uint32_t(Brain::paramCount())) return false;
 
     // everything goes into temporaries first, so a truncated or corrupt
     // file leaves the running simulation untouched
-    cfg::Tunables tune;
+    cfg::Tunables tune;   // default-initialised, so fields a v2 file lacks
+                          // (vision/speed) keep their standard values
     if (!rd(in, tune.foodPerSec) || !rd(in, tune.foodEnergy) ||
         !rd(in, tune.mutationSigma) || !rd(in, tune.preyCostMul) ||
         !rd(in, tune.predCostMul) || !rd(in, tune.predGainMul))
         return false;
+    if (version >= 3)
+    {
+        if (!rd(in, tune.preyVision) || !rd(in, tune.preySpeed) ||
+            !rd(in, tune.predVision) || !rd(in, tune.predSpeed))
+            return false;
+    }
 
     float time = 0.f, foodAccum = 0.f;
     std::uint64_t nextId = 1;

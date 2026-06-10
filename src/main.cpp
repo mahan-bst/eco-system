@@ -132,16 +132,18 @@ static void drawWorld(sf::RenderWindow& window, const Simulation& sim,
         sf::CircleShape ring;
         ring.setFillColor(sf::Color::Transparent);
         ring.setOutlineThickness(1.f);
-        ring.setRadius(cfg::PREY.vision);
-        ring.setOrigin({ cfg::PREY.vision, cfg::PREY.vision });
+        const float pv = cfg::tune.preyVision;
+        ring.setRadius(pv);
+        ring.setOrigin({ pv, pv });
         ring.setOutlineColor(sf::Color(96, 196, 208, 18));
         for (const auto& a : sim.preyList())
         {
             ring.setPosition(a.pos);
             window.draw(ring);
         }
-        ring.setRadius(cfg::PRED.vision);
-        ring.setOrigin({ cfg::PRED.vision, cfg::PRED.vision });
+        const float dv = cfg::tune.predVision;
+        ring.setRadius(dv);
+        ring.setOrigin({ dv, dv });
         ring.setOutlineColor(sf::Color(235, 105, 86, 22));
         for (const auto& a : sim.predList())
         {
@@ -198,9 +200,10 @@ static void drawWorld(sf::RenderWindow& window, const Simulation& sim,
     if (selected)
     {
         const auto& S = selectedIsPred ? cfg::PRED : cfg::PREY;
+        const float vr = selectedIsPred ? cfg::tune.predVision : cfg::tune.preyVision;
 
-        sf::CircleShape vis(S.vision);
-        vis.setOrigin({ S.vision, S.vision });
+        sf::CircleShape vis(vr);
+        vis.setOrigin({ vr, vr });
         vis.setPosition(selected->pos);
         vis.setFillColor(sf::Color::Transparent);
         vis.setOutlineColor(sf::Color(220, 230, 240, 45));
@@ -349,6 +352,10 @@ int main()
     tuning.add("prey cost x", &cfg::tune.preyCostMul,   0.4f,  2.0f,  "%.2f");
     tuning.add("pred cost x", &cfg::tune.predCostMul,   0.4f,  2.0f,  "%.2f");
     tuning.add("pred meal x", &cfg::tune.predGainMul,   0.4f,  2.0f,  "%.2f");
+    tuning.add("prey vision", &cfg::tune.preyVision,   30.f, 250.f,  "%.0f");
+    tuning.add("prey speed",  &cfg::tune.preySpeed,    30.f, 180.f,  "%.0f");
+    tuning.add("pred vision", &cfg::tune.predVision,   30.f, 250.f,  "%.0f");
+    tuning.add("pred speed",  &cfg::tune.predSpeed,    30.f, 180.f,  "%.0f");
     tuning.setPosition({ cfg::WORLD_X + 12.f,
                          cfg::WORLD_Y + cfg::WORLD_H - tuning.height() - 12.f });
 

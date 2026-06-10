@@ -107,8 +107,17 @@ namespace cfg
         float preyCostMul   = 1.f;   // multiplies the whole prey energy bill
         float predCostMul   = 1.f;   // same for predators
         float predGainMul   = 1.f;   // multiplies energy gained per kill
+        float preyVision    = PREY.vision;     // sense radius, px
+        float preySpeed     = PREY.maxSpeed;   // px/s at full throttle
+        float predVision    = PRED.vision;
+        float predSpeed     = PRED.maxSpeed;
     };
     inline Tunables tune;
+
+    inline float maxSpeedOf(const SpeciesCfg& s)
+    {
+        return (&s == &PRED) ? tune.predSpeed : tune.preySpeed;
+    }
 
     // Energy burned per second at the given throttle (0..1).
     inline float metabolicCost(const SpeciesCfg& s, float throttle)

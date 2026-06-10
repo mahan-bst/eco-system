@@ -74,8 +74,8 @@ with a white ring and its vision circle. Click empty space to deselect.
 | right click | drop a burst of food at the cursor |
 
 The tuning panel exposes food spawn rate, food energy, mutation strength,
-prey/predator metabolism multipliers and the predator meal-gain multiplier —
-all applied instantly.
+prey/predator metabolism multipliers, the predator meal-gain multiplier, and
+each species' vision radius and max speed — all applied instantly.
 
 ## Save / load
 
@@ -86,6 +86,9 @@ one back. Very handy for presentations: evolve a competent population at ×32
 beforehand, save it, and open the trained world live instead of waiting.
 Loading validates the file and leaves the running world untouched if the file
 is corrupt or from an incompatible build (the brain topology is checked).
+Saves from older versions of the format still load — fields that did not
+exist yet (e.g. the vision/speed sliders) simply get their default values,
+and re-saving writes the current format.
 
 ## The charts
 
