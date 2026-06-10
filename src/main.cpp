@@ -218,6 +218,21 @@ static void drawWorld(sf::RenderWindow& window, const Simulation& sim,
         mark.setOutlineColor(sf::Color(230, 240, 250, 210));
         mark.setOutlineThickness(2.f);
         window.draw(mark);
+
+        // little energy bar floating above the star of the show
+        const float frac = clampf(selected->energy / S.capacity, 0.f, 1.f);
+        const sf::Vector2f barPos = selected->pos + sf::Vector2f(0.f, -(S.size + 13.f));
+        sf::RectangleShape barBg({ 30.f, 4.f });
+        barBg.setOrigin({ 15.f, 2.f });
+        barBg.setPosition(barPos);
+        barBg.setFillColor(sf::Color(0, 0, 0, 150));
+        window.draw(barBg);
+        sf::RectangleShape bar({ 30.f * frac, 4.f });
+        bar.setOrigin({ 15.f, 2.f });
+        bar.setPosition(barPos);
+        bar.setFillColor(sf::Color(std::uint8_t(230 - 150.f * frac),
+                                   std::uint8_t(80 + 140.f * frac), 80));
+        window.draw(bar);
     }
 }
 
@@ -304,6 +319,9 @@ static void drawPanel(sf::RenderWindow& window, const Simulation& sim,
         window.draw(makeText(*font,
                              "left-click  inspect a brain      right-click  drop food",
                              12, { x, cy + 54.f }, pal::textDim));
+        window.draw(makeText(*font,
+                             "F  follow cam      scroll  zoom      Esc  deselect",
+                             12, { x, cy + 72.f }, pal::textDim));
     }
 }
 
@@ -366,6 +384,16 @@ int main()
     bool showVision = false;
     int  speedIdx = 0;
 
+    // ----- follow cam ("nature documentary mode") -----
+    bool  follow = false;          // F toggles; engages while something is selected
+    float followZoom = 3.2f;       // mouse-wheel adjustable
+    float camZoom = 1.f;           // smoothed actual zoom
+    sf::Vector2f camCenter(cfg::WORLD_W / 2.f, cfg::WORLD_H / 2.f);
+    bool  hadSelection = false;    // for the "your creature died" drama
+    float lastSelEnergy = 0.f;
+    bool  lastSelWasPred = false;
+    float liveBlink = 0.f;         // timer for the blinking LIVE tag
+
     // transient feedback line ("state saved", ...) shown in the panel header
     std::string status;
     float statusTimer = 0.f;
@@ -412,6 +440,18 @@ int main()
                     break;
                 case sf::Keyboard::Key::T:
                     tuning.visible = !tuning.visible;
+                    break;
+                case sf::Keyboard::Key::F:
+                    follow = !follow;
+                    if (follow)
+                        setStatus(selection.id != 0
+                                      ? "follow cam ON"
+                                      : "follow cam armed - click a creature");
+                    else
+                        setStatus("follow cam off");
+                    break;
+                case sf::Keyboard::Key::Escape:
+                    selection.clear();
                     break;
                 case sf::Keyboard::Key::R:
                     sim.reset();
@@ -469,6 +509,13 @@ int main()
                 }
             }
 
+            else if (const auto* mw = event->getIf<sf::Event::MouseWheelScrolled>())
+            {
+                if (follow)
+                    followZoom = clampf(followZoom * (1.f + 0.12f * mw->delta),
+                                        1.6f, 6.5f);
+            }
+
             else if (const auto* mm = event->getIf<sf::Event::MouseMoved>())
                 tuning.onMouseMoved({ float(mm->position.x), float(mm->position.y) });
 
@@ -489,6 +536,48 @@ int main()
 
         const Animal* selected = selection.resolve(sim);
 
+        // the creature we were filming just vanished — break the bad news
+        if (hadSelection && !selected && follow)
+        {
+            if (lastSelWasPred)
+                setStatus("your predator starved...");
+            else
+                setStatus(lastSelEnergy > 8.f ? "your prey got EATEN!"
+                                              : "your prey starved...");
+        }
+        hadSelection = selected != nullptr;
+        if (selected)
+        {
+            lastSelEnergy  = selected->energy;
+            lastSelWasPred = selection.isPred;
+        }
+
+        // ----- camera: glide toward the followed creature, else zoom out -----
+        const bool filming = follow && selected;
+        const float targetZoom = filming ? followZoom : 1.f;
+        sf::Vector2f targetCenter(cfg::WORLD_W / 2.f, cfg::WORLD_H / 2.f);
+        if (filming)
+        {
+            // lead the shot a little toward where the creature is heading
+            const sf::Vector2f dir(std::cos(selected->heading),
+                                   std::sin(selected->heading));
+            targetCenter = selected->pos + dir * 26.f;
+        }
+        const float k = 1.f - std::exp(-5.f * cfg::FIXED_DT);
+        camZoom   += (targetZoom - camZoom) * k;
+        camCenter += (targetCenter - camCenter) * k;
+
+        // never show the void outside the world
+        const float hw = cfg::WORLD_W / (2.f * camZoom);
+        const float hh = cfg::WORLD_H / (2.f * camZoom);
+        camCenter.x = clampf(camCenter.x, hw, cfg::WORLD_W - hw);
+        camCenter.y = clampf(camCenter.y, hh, cfg::WORLD_H - hh);
+
+        worldView.setCenter(camCenter);
+        worldView.setSize({ cfg::WORLD_W / camZoom, cfg::WORLD_H / camZoom });
+
+        liveBlink += cfg::FIXED_DT;
+
         if (statusTimer > 0.f)
         {
             statusTimer -= cfg::FIXED_DT;   // one frame of wall time
@@ -508,6 +597,52 @@ int main()
         border.setOutlineColor(pal::worldBorder);
         border.setOutlineThickness(1.f);
         window.draw(border);
+
+        // cinematic letterbox while the follow cam is engaged
+        const float follow01 = clampf((camZoom - 1.f) / 1.8f, 0.f, 1.f);
+        if (follow01 > 0.02f)
+        {
+            const float bh = 44.f * follow01;
+            sf::RectangleShape barShape({ cfg::WORLD_W, bh });
+            barShape.setFillColor(sf::Color(0, 0, 0, std::uint8_t(165 * follow01)));
+            barShape.setPosition({ cfg::WORLD_X, cfg::WORLD_Y });
+            window.draw(barShape);
+            barShape.setPosition({ cfg::WORLD_X, cfg::WORLD_Y + cfg::WORLD_H - bh });
+            window.draw(barShape);
+
+            if (hasFont && selected && follow01 > 0.6f)
+            {
+                const std::uint8_t a = std::uint8_t(255 * follow01);
+                char buf[96];
+                std::snprintf(buf, sizeof(buf),
+                              "FOLLOWING %s #%llu      energy %.0f      age %.0fs",
+                              selection.isPred ? "PREDATOR" : "PREY",
+                              static_cast<unsigned long long>(selected->id),
+                              selected->energy, selected->age);
+                sf::Text title = makeText(font, buf, 15, { 0.f, 0.f },
+                                          selection.isPred
+                                              ? sf::Color(235, 105, 86, a)
+                                              : sf::Color(96, 196, 208, a));
+                title.setPosition({ cfg::WORLD_X +
+                                        (cfg::WORLD_W -
+                                         title.getLocalBounds().size.x) / 2.f,
+                                    cfg::WORLD_Y + bh / 2.f - 11.f });
+                window.draw(title);
+
+                // blinking LIVE tag, because every nature documentary needs one
+                const std::uint8_t blink =
+                    std::sin(liveBlink * 4.f) > 0.f ? a : std::uint8_t(a / 5);
+                window.draw(makeText(font, "LIVE", 14,
+                                     { cfg::WORLD_X + 18.f,
+                                       cfg::WORLD_Y + bh / 2.f - 10.f },
+                                     sf::Color(255, 70, 70, blink)));
+
+                window.draw(makeText(font, "scroll to zoom", 11,
+                                     { cfg::WORLD_X + 18.f,
+                                       cfg::WORLD_Y + cfg::WORLD_H - bh / 2.f - 8.f },
+                                     sf::Color(190, 200, 210, std::uint8_t(a / 2))));
+            }
+        }
 
         drawPanel(window, sim, history, hasFont ? &font : nullptr,
                   paused, cfg::SPEED_STEPS[speedIdx], showVision, tuning.visible,

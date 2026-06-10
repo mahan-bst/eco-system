@@ -72,6 +72,14 @@ with a white ring and its vision circle. Click empty space to deselect.
 | `R` | restart the simulation |
 | left click | select a creature / open its brain |
 | right click | drop a burst of food at the cursor |
+| `F` | follow cam — the camera glides in and tracks the selected creature |
+| mouse wheel | zoom while following |
+| `Esc` | deselect |
+
+Follow cam is the presentation party trick: select a predator, press `F`,
+and the view zooms in documentary-style (letterbox, blinking LIVE tag, energy
+bar over the creature) while its brain panel shows every decision live. If
+your star gets eaten, the status line will let you know.
 
 The tuning panel exposes food spawn rate, food energy, mutation strength,
 prey/predator metabolism multipliers, the predator meal-gain multiplier, and
