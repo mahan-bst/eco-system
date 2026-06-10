@@ -4,18 +4,22 @@
 #include <cstdio>
 #include <string>
 
+#include "Champions.hpp"
 #include "Simulation.hpp"
 
 namespace
 {
-    constexpr float TITLE_H   = 30.f;
+    constexpr float TITLE_H   = 26.f;
+    constexpr float TAB_H     = 24.f;
     constexpr float SECTION_H = 20.f;
     constexpr float ROW_H     = 22.f;
     constexpr float PAD       = 10.f;
+    constexpr float HINT_H    = 18.f;
 
     const sf::Color PREY_COL(96, 196, 208);
     const sf::Color PRED_COL(235, 105, 86);
     const sf::Color GOLD(255, 196, 84);
+    const sf::Color DIM(120, 132, 144);
 
     sf::Text makeText(const sf::Font& font, const std::string& str,
                       unsigned size, sf::Vector2f pos, sf::Color color)
@@ -27,31 +31,69 @@ namespace
     }
 }
 
+float Leaderboard::contentTop() const
+{
+    return m_pos.y + TITLE_H + TAB_H;
+}
+
+sf::FloatRect Leaderboard::tabRowRect() const
+{
+    return { { m_pos.x, m_pos.y + TITLE_H }, { WIDTH, TAB_H } };
+}
+
 void Leaderboard::update(const Simulation& sim)
 {
     m_rows.clear();
 
-    const auto add = [&](const std::vector<Animal>& list, bool isPred)
+    if (m_mode == Mode::Alive)
     {
-        std::vector<const Animal*> sorted;
-        sorted.reserve(list.size());
-        for (const auto& a : list) sorted.push_back(&a);
+        const auto add = [&](const std::vector<Animal>& list, bool isPred)
+        {
+            std::vector<const Animal*> sorted;
+            sorted.reserve(list.size());
+            for (const auto& a : list) sorted.push_back(&a);
 
-        const std::size_t n = std::min<std::size_t>(TOP_N, sorted.size());
-        std::partial_sort(sorted.begin(), sorted.begin() + n, sorted.end(),
-                          [](const Animal* x, const Animal* y)
-                          { return x->age > y->age; });
-        for (std::size_t i = 0; i < n; ++i)
-            m_rows.push_back({ sorted[i]->id, sorted[i]->age,
-                               sorted[i]->energy, isPred, 0.f });
-        return int(n);
-    };
+            const std::size_t n = std::min<std::size_t>(TOP_N, sorted.size());
+            std::partial_sort(sorted.begin(), sorted.begin() + n, sorted.end(),
+                              [](const Animal* x, const Animal* y)
+                              { return x->age > y->age; });
+            for (std::size_t i = 0; i < n; ++i)
+            {
+                Entry e;
+                e.id = sorted[i]->id;
+                e.age = sorted[i]->age;
+                e.offspring = sorted[i]->offspring;
+                e.isPred = isPred;
+                m_rows.push_back(e);
+            }
+            return int(n);
+        };
+        m_preyCount = add(sim.preyList(), false);
+        add(sim.predList(), true);
+    }
+    else   // Hall of Fame: straight from the champion archives (best-first)
+    {
+        const auto add = [&](const ChampionArchive& arc, bool isPred)
+        {
+            const int n = arc.size();
+            for (int i = 0; i < n; ++i)
+            {
+                Entry e;
+                e.id = arc.at(i).id;
+                e.age = arc.at(i).age;
+                e.offspring = arc.at(i).offspring;
+                e.isPred = isPred;
+                e.champIndex = i;
+                m_rows.push_back(e);
+            }
+            return n;
+        };
+        m_preyCount = add(sim.preyChampions(), false);
+        add(sim.predChampions(), true);
+    }
 
-    m_preyCount = add(sim.preyList(), false);
-    add(sim.predList(), true);
-
-    // layout: title, "PREY" header, prey rows, gap, "PREDATORS" header, rows
-    float y = m_pos.y + TITLE_H + SECTION_H;
+    // layout: prey header, prey rows, gap + predator header, predator rows
+    float y = contentTop() + SECTION_H;
     for (int i = 0; i < int(m_rows.size()); ++i)
     {
         if (i == m_preyCount)
@@ -61,7 +103,7 @@ void Leaderboard::update(const Simulation& sim)
     }
     if (m_rows.empty() || m_preyCount == int(m_rows.size()))
         y += 6.f + SECTION_H;       // an empty predator section still shows
-    m_height = (y + 18.f + PAD) - m_pos.y;   // + the "click to follow" hint
+    m_height = (y + HINT_H + PAD) - m_pos.y;
 }
 
 void Leaderboard::draw(sf::RenderTarget& rt, const sf::Font* font,
@@ -78,15 +120,38 @@ void Leaderboard::draw(sf::RenderTarget& rt, const sf::Font* font,
 
     if (!font) return;
 
-    rt.draw(makeText(*font, "LEADERBOARD - oldest alive", 13,
-                     { m_pos.x + PAD, m_pos.y + 7.f }, sf::Color(214, 224, 234)));
+    rt.draw(makeText(*font, "LEADERBOARD", 13,
+                     { m_pos.x + PAD, m_pos.y + 6.f }, sf::Color(214, 224, 234)));
 
-    const float preyHeaderY = m_pos.y + TITLE_H;
-    const float predHeaderY = preyHeaderY + SECTION_H +
-                              float(m_preyCount) * ROW_H + 6.f;
-    rt.draw(makeText(*font, "PREY", 12, { m_pos.x + PAD, preyHeaderY }, PREY_COL));
-    rt.draw(makeText(*font, "PREDATORS", 12, { m_pos.x + PAD, predHeaderY }, PRED_COL));
+    // ----- tabs -----
+    const float tabY = m_pos.y + TITLE_H + 3.f;
+    const bool alive = m_mode == Mode::Alive;
+    rt.draw(makeText(*font, "Alive", 13, { m_pos.x + PAD, tabY },
+                     alive ? sf::Color(214, 224, 234) : DIM));
+    rt.draw(makeText(*font, "Hall of Fame", 13, { m_pos.x + PAD + 70.f, tabY },
+                     alive ? DIM : GOLD));
+    {   // underline the active tab
+        const float ux = alive ? m_pos.x + PAD : m_pos.x + PAD + 70.f;
+        const float uw = alive ? 36.f : 86.f;
+        sf::RectangleShape u({ uw, 2.f });
+        u.setPosition({ ux, tabY + 18.f });
+        u.setFillColor(alive ? sf::Color(214, 224, 234) : GOLD);
+        rt.draw(u);
+    }
 
+    // ----- section headers -----
+    const float preyHeaderY = contentTop();
+    const float predHeaderY = preyHeaderY + SECTION_H + float(m_preyCount) * ROW_H + 6.f;
+    const char* preyLbl = alive ? "PREY" : "PREY - best ever";
+    const char* predLbl = alive ? "PREDATORS" : "PREDATORS - best ever";
+    rt.draw(makeText(*font, preyLbl, 12, { m_pos.x + PAD, preyHeaderY }, PREY_COL));
+    rt.draw(makeText(*font, predLbl, 12, { m_pos.x + PAD, predHeaderY }, PRED_COL));
+
+    if (m_rows.empty())
+        rt.draw(makeText(*font, "no champions yet - keep evolving", 11,
+                         { m_pos.x + PAD, preyHeaderY + SECTION_H }, DIM));
+
+    // ----- rows -----
     char buf[48];
     for (int i = 0; i < int(m_rows.size()); ++i)
     {
@@ -103,40 +168,63 @@ void Leaderboard::draw(sf::RenderTarget& rt, const sf::Font* font,
 
         std::snprintf(buf, sizeof(buf), "%d.", rank);
         rt.draw(makeText(*font, buf, 12, { m_pos.x + PAD, e.rowY + 2.f },
-                         rank == 1 ? GOLD : sf::Color(130, 142, 154)));
+                         rank == 1 ? GOLD : DIM));
 
         std::snprintf(buf, sizeof(buf), "#%llu",
                       static_cast<unsigned long long>(e.id));
         rt.draw(makeText(*font, buf, 12, { m_pos.x + PAD + 24.f, e.rowY + 2.f },
                          e.isPred ? PRED_COL : PREY_COL));
 
-        std::snprintf(buf, sizeof(buf), "%.0fs", e.age);
-        sf::Text age = makeText(*font, buf, 12, { 0.f, 0.f },
+        // right-aligned headline: lifespan (Alive) or offspring (Hall of Fame)
+        if (alive) std::snprintf(buf, sizeof(buf), "%.0fs", e.age);
+        else       std::snprintf(buf, sizeof(buf), "%d kids", e.offspring);
+        sf::Text val = makeText(*font, buf, 12, { 0.f, 0.f },
                                 sf::Color(208, 218, 228));
-        age.setPosition({ m_pos.x + WIDTH - PAD - age.getLocalBounds().size.x,
+        val.setPosition({ m_pos.x + WIDTH - PAD - val.getLocalBounds().size.x,
                           e.rowY + 2.f });
-        rt.draw(age);
+        rt.draw(val);
     }
 
-    rt.draw(makeText(*font, "click a row to follow", 10,
-                     { m_pos.x + PAD, m_pos.y + m_height - PAD - 14.f },
-                     sf::Color(120, 132, 144)));
+    rt.draw(makeText(*font, alive ? "click a row to follow"
+                                   : "click a row to spawn a copy",
+                     10, { m_pos.x + PAD, m_pos.y + m_height - PAD - 12.f }, DIM));
 }
 
-bool Leaderboard::onMousePressed(sf::Vector2f p, std::uint64_t& id,
-                                 bool& isPred) const
+bool Leaderboard::contains(sf::Vector2f p) const
 {
     if (!visible) return false;
+    return sf::FloatRect(m_pos, { WIDTH, m_height }).contains(p);
+}
 
-    const sf::FloatRect bounds(m_pos, { WIDTH, m_height });
-    if (!bounds.contains(p)) return false;
+bool Leaderboard::onMousePressed(sf::Vector2f p, Click& out)
+{
+    out = Click{};
+    if (!contains(p)) return false;
 
+    // tab row: switch view
+    if (tabRowRect().contains(p))
+    {
+        m_mode = (p.x < m_pos.x + PAD + 64.f) ? Mode::Alive : Mode::HallOfFame;
+        return true;
+    }
+
+    // a data row?
     for (const auto& e : m_rows)
     {
         if (p.y >= e.rowY && p.y < e.rowY + ROW_H)
         {
-            id = e.id;
-            isPred = e.isPred;
+            if (m_mode == Mode::Alive)
+            {
+                out.type = Click::Follow;
+                out.id = e.id;
+                out.isPred = e.isPred;
+            }
+            else
+            {
+                out.type = Click::Spawn;
+                out.isPred = e.isPred;
+                out.champIndex = e.champIndex;
+            }
             break;
         }
     }

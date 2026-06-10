@@ -4,6 +4,7 @@
 #include <iosfwd>
 #include <vector>
 
+#include "Champions.hpp"
 #include "Entities.hpp"
 #include "Grid.hpp"
 
@@ -20,6 +21,10 @@ public:
     void step(float dt);
     void spawnFoodBurst(sf::Vector2f pos, int count);   // demo helper (mouse)
 
+    // drop a live copy of an archived champion into the world; returns its new
+    // id (0 if the index is invalid or the species is at its cap)
+    std::uint64_t spawnChampion(bool predator, int index);
+
     // full world snapshot: time, food, every animal incl. its brain weights,
     // and the live tunables. deserialize leaves the sim untouched on failure.
     void serialize(std::ostream& out) const;
@@ -29,6 +34,9 @@ public:
     const std::vector<Food>&   foodList() const { return m_food; }
     const std::vector<Animal>& preyList() const { return m_prey; }
     const std::vector<Animal>& predList() const { return m_pred; }
+
+    const ChampionArchive& preyChampions() const { return m_preyHof; }
+    const ChampionArchive& predChampions() const { return m_predHof; }
 
     static Averages average(const std::vector<Animal>& animals);
 
@@ -46,12 +54,17 @@ private:
                       std::size_t population, std::size_t cap);
 
     Animal spawnAnimal(const cfg::SpeciesCfg& s);
-    void topUp(std::vector<Animal>& pop, const cfg::SpeciesCfg& s, int floor);
+    void topUp(std::vector<Animal>& pop, const cfg::SpeciesCfg& s, int floor,
+               const ChampionArchive& archive);
     void compact(std::vector<Animal>& babyPrey, std::vector<Animal>& babyPred);
+
+    ChampionArchive& hofFor(const cfg::SpeciesCfg& s);
 
     std::vector<Food>   m_food;
     std::vector<Animal> m_prey;
     std::vector<Animal> m_pred;
+
+    ChampionArchive m_preyHof, m_predHof;
 
     SpatialGrid m_foodGrid, m_preyGrid, m_predGrid;
 

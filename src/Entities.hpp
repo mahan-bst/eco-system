@@ -21,6 +21,7 @@ struct Animal
     float heading = 0.f;      // radians
     float energy  = 0.f;
     float age     = 0.f;      // seconds alive
+    int   offspring = 0;      // children produced — fitness for the hall of fame
     Brain brain;
     bool alive = true;
 };

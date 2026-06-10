@@ -20,9 +20,14 @@ Energy drains constantly (`base + moveCost · throttle²`), so both standing
 still forever and sprinting blindly are losing strategies — the network has
 to learn *when* to move and *where*.
 
-If a species drops below a small floor, a few "immigrants" appear (mutated
-descendants of survivors, or fresh random brains after a true extinction),
-so the experiment never dead-ends.
+If a species drops below a small floor, a few "immigrants" appear. Rather than
+random noise, they are reseeded from the **champion archive** — a per-species
+hall of fame of the best brains ever recorded (ranked by offspring produced).
+So after a crash a species recovers *competent* instead of starting over, and
+the boom/bust cycle keeps its hard-won gains. The archived brains are always
+mutated on reseed and several distinct champions are kept, so the archive is a
+safety net, not a monoculture pump. Open the **Hall of Fame** tab of the
+leaderboard (`L`) to see them and click one to drop a live copy into the world.
 
 ## The brain
 
@@ -77,7 +82,7 @@ with a white ring and its vision circle. Click empty space to deselect.
 | left click | select a creature / open its brain |
 | right click | drop a burst of food at the cursor |
 | `F` | follow cam — the camera glides in and tracks the selected creature |
-| `L` | leaderboard — the oldest living prey and predators; click a row to follow them |
+| `L` | leaderboard — two tabs: **Alive** (oldest living, click to follow) and **Hall of Fame** (best brains ever, click to spawn a copy) |
 | mouse wheel | zoom while following |
 | `Esc` | deselect |
 

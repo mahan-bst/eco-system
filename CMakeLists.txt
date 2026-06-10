@@ -12,6 +12,7 @@ add_executable(MyGame
     src/Simulation.cpp
     src/Brain.cpp
     src/BrainView.cpp
+    src/Champions.cpp
     src/Charts.cpp
     src/Leaderboard.cpp
     src/SaveState.cpp

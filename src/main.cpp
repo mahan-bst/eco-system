@@ -527,20 +527,31 @@ int main()
 
                 if (mb->button == sf::Mouse::Button::Left)
                 {
-                    std::uint64_t lbId = 0;
-                    bool lbPred = false;
+                    Leaderboard::Click lc;
                     if (tuning.onMousePressed(pix))
                     {
                         // sliders ate the click
                     }
-                    else if (leaderboard.onMousePressed(pix, lbId, lbPred))
+                    else if (leaderboard.onMousePressed(pix, lc))
                     {
-                        if (lbId != 0)              // a row: follow that creature
+                        if (lc.type == Leaderboard::Click::Follow && lc.id != 0)
                         {
-                            selection.id = lbId;
-                            selection.isPred = lbPred;
+                            selection.id = lc.id;       // follow that live creature
+                            selection.isPred = lc.isPred;
                             follow = true;
                             setStatus("follow cam ON");
+                        }
+                        else if (lc.type == Leaderboard::Click::Spawn)
+                        {
+                            const std::uint64_t nid =
+                                sim.spawnChampion(lc.isPred, lc.champIndex);
+                            if (nid)                    // ride along with the legend
+                            {
+                                selection.id = nid;
+                                selection.isPred = lc.isPred;
+                                follow = true;
+                                setStatus("champion spawned");
+                            }
                         }
                     }
                     else if (!onBrainView && inWorld)
@@ -548,10 +559,7 @@ int main()
                 }
                 else if (mb->button == sf::Mouse::Button::Right)
                 {
-                    std::uint64_t d1 = 0;
-                    bool d2 = false;
-                    if (inWorld && !onBrainView &&
-                        !leaderboard.onMousePressed(pix, d1, d2))
+                    if (inWorld && !onBrainView && !leaderboard.contains(pix))
                         sim.spawnFoodBurst(p, 20);
                 }
             }

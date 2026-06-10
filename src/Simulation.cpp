@@ -84,6 +84,9 @@ void Simulation::reset()
     m_time = 0.f;
     m_foodAccum = 0.f;
 
+    m_preyHof.clear();
+    m_predHof.clear();
+
     m_food.clear();
     m_food.reserve(cfg::FOOD_MAX);
     for (int i = 0; i < cfg::FOOD_START; ++i)
@@ -340,18 +343,34 @@ void Simulation::tryReproduce(Animal& a, const cfg::SpeciesCfg& s,
     a.energy      = s.parentKeep * e;
 
     babies.push_back(child);
+
+    // reproduction is the fitness currency: count it and offer the proven
+    // parent to the hall of fame
+    ++a.offspring;
+    hofFor(s).consider(a.brain, a.id, a.offspring, a.age);
 }
 
-void Simulation::topUp(std::vector<Animal>& pop, const cfg::SpeciesCfg& s, int floor)
+ChampionArchive& Simulation::hofFor(const cfg::SpeciesCfg& s)
 {
+    return (&s == &cfg::PRED) ? m_predHof : m_preyHof;
+}
+
+void Simulation::topUp(std::vector<Animal>& pop, const cfg::SpeciesCfg& s,
+                       int floor, const ChampionArchive& archive)
+{
+    const std::size_t survivors = pop.size();   // pick parents from these only
     while (int(pop.size()) < floor)
     {
         Animal a = spawnAnimal(s);
-        // newcomers descend from a random survivor when possible, so the
-        // species' learned behaviour is not thrown away
-        if (!pop.empty())
-            a.brain = pop[std::size_t(frand(0.f, float(pop.size()) - 0.001f))]
+        // Reseed priority: after a wipe, recover from the hall of fame so the
+        // species comes back competent instead of random; while merely thin,
+        // mix proven champions with live survivors to keep diversity.
+        if (!archive.empty() && (survivors == 0 || frand(0.f, 1.f) < 0.5f))
+            a.brain = archive.reseed();
+        else if (survivors > 0)
+            a.brain = pop[std::size_t(frand(0.f, float(survivors) - 0.001f))]
                           .brain.offspring();
+        // else: a.brain keeps its fresh random weights (true cold start)
         pop.push_back(a);
     }
 }
@@ -361,6 +380,13 @@ void Simulation::compact(std::vector<Animal>& babyPrey, std::vector<Animal>& bab
     const auto deadAnimal = [](const Animal& a) { return !a.alive; };
     const auto deadFood   = [](const Food& f)   { return !f.alive; };
 
+    // a creature's final lifetime stats are its truest fitness — capture the
+    // dead before they are swept away
+    for (const auto& a : m_prey)
+        if (!a.alive) m_preyHof.consider(a.brain, a.id, a.offspring, a.age);
+    for (const auto& a : m_pred)
+        if (!a.alive) m_predHof.consider(a.brain, a.id, a.offspring, a.age);
+
     m_food.erase(std::remove_if(m_food.begin(), m_food.end(), deadFood),   m_food.end());
     m_prey.erase(std::remove_if(m_prey.begin(), m_prey.end(), deadAnimal), m_prey.end());
     m_pred.erase(std::remove_if(m_pred.begin(), m_pred.end(), deadAnimal), m_pred.end());
@@ -368,8 +394,26 @@ void Simulation::compact(std::vector<Animal>& babyPrey, std::vector<Animal>& bab
     m_prey.insert(m_prey.end(), babyPrey.begin(), babyPrey.end());
     m_pred.insert(m_pred.end(), babyPred.begin(), babyPred.end());
 
-    topUp(m_prey, cfg::PREY, cfg::PREY_FLOOR);
-    topUp(m_pred, cfg::PRED, cfg::PRED_FLOOR);
+    topUp(m_prey, cfg::PREY, cfg::PREY_FLOOR, m_preyHof);
+    topUp(m_pred, cfg::PRED, cfg::PRED_FLOOR, m_predHof);
+}
+
+std::uint64_t Simulation::spawnChampion(bool predator, int index)
+{
+    const auto& s        = predator ? cfg::PRED : cfg::PREY;
+    auto&       pop      = predator ? m_pred : m_prey;
+    const auto& archive  = predator ? m_predHof : m_preyHof;
+    const int   cap      = predator ? cfg::PRED_MAX : cfg::PREY_MAX;
+
+    if (index < 0 || index >= archive.size() || int(pop.size()) >= cap)
+        return 0;
+
+    Animal a = spawnAnimal(s);
+    a.brain  = archive.at(index).brain;   // an exact copy of the legend
+    a.brain.setMemory(0.f, 0.f);
+    a.energy = 0.9f * s.capacity;          // arrive in fine form
+    pop.push_back(a);
+    return a.id;
 }
 
 // ---------------------------------------------------------------------------
@@ -384,9 +428,11 @@ namespace
     //   4 - animal records gain velocity + brain memory state
     //       (v2/v3 brains had a different topology, so the paramCount check
     //        rejects them anyway)
-    constexpr char SAVE_MAGIC[8] = { 'E','C','O','S','I','M','0','4' };
+    //   5 - per-animal offspring count + the two champion archives;
+    //       v4 files load fine (offspring defaults to 0, archives start empty)
+    constexpr char SAVE_MAGIC[8] = { 'E','C','O','S','I','M','0','5' };
     constexpr int  SAVE_VERSION_MIN = 2;
-    constexpr int  SAVE_VERSION_MAX = 4;
+    constexpr int  SAVE_VERSION_MAX = 5;
 
     template <class T>
     void wr(std::ostream& out, const T& v)
@@ -409,6 +455,7 @@ namespace
         wr(out, a.heading);
         wr(out, a.energy);
         wr(out, a.age);
+        wr(out, std::int32_t(a.offspring));
         wr(out, a.brain.memory()[0]);
         wr(out, a.brain.memory()[1]);
         for (float w : a.brain.weights()) wr(out, w);
@@ -423,6 +470,12 @@ namespace
             return false;
         if (!rd(in, a.heading) || !rd(in, a.energy) || !rd(in, a.age))
             return false;
+        if (version >= 5)
+        {
+            std::int32_t off = 0;
+            if (!rd(in, off)) return false;
+            a.offspring = off;
+        }
         if (version >= 4)
         {
             float m0 = 0.f, m1 = 0.f;
@@ -480,6 +533,9 @@ void Simulation::serialize(std::ostream& out) const
     for (const auto& a : m_prey) writeAnimal(out, a);
     wr(out, std::uint32_t(m_pred.size()));
     for (const auto& a : m_pred) writeAnimal(out, a);
+
+    m_preyHof.serialize(out);
+    m_predHof.serialize(out);
 }
 
 bool Simulation::deserialize(std::istream& in)
@@ -525,6 +581,12 @@ bool Simulation::deserialize(std::istream& in)
     if (!readAnimals(in, prey, 100000, version)) return false;
     if (!readAnimals(in, pred, 100000, version)) return false;
 
+    ChampionArchive preyHof, predHof;   // empty for v4-; loaded for v5+
+    if (version >= 5)
+    {
+        if (!preyHof.deserialize(in) || !predHof.deserialize(in)) return false;
+    }
+
     // commit
     cfg::tune    = tune;
     m_time       = time;
@@ -533,6 +595,8 @@ bool Simulation::deserialize(std::istream& in)
     m_food       = std::move(food);
     m_prey       = std::move(prey);
     m_pred       = std::move(pred);
+    m_preyHof    = std::move(preyHof);
+    m_predHof    = std::move(predHof);
     return true;
 }
 
