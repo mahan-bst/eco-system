@@ -459,6 +459,7 @@ int main()
                     break;
                 case sf::Keyboard::Key::L:
                     leaderboard.visible = !leaderboard.visible;
+                    if (leaderboard.visible) leaderboard.markDirty();
                     break;
                 case sf::Keyboard::Key::T:
                     tuning.visible = !tuning.visible;

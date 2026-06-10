@@ -43,6 +43,11 @@ sf::FloatRect Leaderboard::tabRowRect() const
 
 void Leaderboard::update(const Simulation& sim)
 {
+    // rankings change slowly, so rebuild a few times per second instead of
+    // every frame — the per-frame sort + allocation was the cost here
+    if (++m_sinceRebuild < REBUILD_EVERY) return;
+    m_sinceRebuild = 0;
+
     m_rows.clear();
 
     if (m_mode == Mode::Alive)
@@ -205,6 +210,7 @@ bool Leaderboard::onMousePressed(sf::Vector2f p, Click& out)
     if (tabRowRect().contains(p))
     {
         m_mode = (p.x < m_pos.x + PAD + 64.f) ? Mode::Alive : Mode::HallOfFame;
+        m_sinceRebuild = REBUILD_EVERY;   // refresh rows for the new tab now
         return true;
     }
 

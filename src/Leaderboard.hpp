@@ -28,6 +28,7 @@ public:
 
     void setPosition(sf::Vector2f pos) { m_pos = pos; }
 
+    void markDirty() { m_sinceRebuild = REBUILD_EVERY; }   // force a rebuild
     void update(const Simulation& sim);   // rebuild rows for the active tab
     void draw(sf::RenderTarget& rt, const sf::Font* font,
               std::uint64_t selectedId) const;
@@ -51,10 +52,12 @@ private:
 
     static constexpr int   TOP_N = 5;
     static constexpr float WIDTH = 252.f;
+    static constexpr int   REBUILD_EVERY = 8;   // rebuild ~7x/sec, not 60x
 
     std::vector<Entry> m_rows;      // prey block first, then predators
     int  m_preyCount = 0;
     Mode m_mode = Mode::Alive;
     sf::Vector2f m_pos;
     float m_height = 0.f;
+    int  m_sinceRebuild = REBUILD_EVERY;   // frames since last rebuild
 };
