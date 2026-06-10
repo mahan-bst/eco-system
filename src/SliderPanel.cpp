@@ -93,7 +93,7 @@ void SliderPanel::draw(sf::RenderTarget& rt, const sf::Font* font) const
     rt.draw(bg);
 
     if (font)
-        rt.draw(makeText(*font, "TUNING - changes apply live", 13,
+        rt.draw(makeText(*font, "TUNING - live  (D = reset defaults)", 13,
                          { m_pos.x + PAD, m_pos.y + 8.f }, sf::Color(214, 224, 234)));
 
     char buf[32];

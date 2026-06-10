@@ -69,6 +69,7 @@ with a white ring and its vision circle. Click empty space to deselect.
 | `.` | single step while paused |
 | `V` | show vision rings for everyone |
 | `T` | tuning sliders — drag to change parameters while it runs |
+| `D` | reset all tuning sliders to the balanced defaults |
 | `S` | save the world to a `.eco` file (a file dialog asks where) |
 | `O` | load a previously saved world |
 | `R` | restart the simulation |

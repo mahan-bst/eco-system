@@ -25,23 +25,31 @@ namespace cfg
     inline constexpr int   SPEED_COUNT = 6;
 
     // ----- food -------------------------------------------------------------
-    inline constexpr int   FOOD_START   = 400;
+    // Generous defaults on purpose: generation-zero brains are random, so the
+    // world has to be forgiving enough for them to bootstrap.
+    inline constexpr int   FOOD_START   = 500;
     inline constexpr float FOOD_PER_SEC = 20.f;   // natural spawn rate
     inline constexpr int   FOOD_MAX     = 1000;
-    inline constexpr float FOOD_ENERGY  = 28.f;   // energy per food item
+    inline constexpr float FOOD_ENERGY  = 30.f;   // energy per food item
     inline constexpr float FOOD_RADIUS  = 2.5f;
 
     // ----- populations ------------------------------------------------------
     inline constexpr int PREY_START = 160;
-    inline constexpr int PRED_START = 24;
+    inline constexpr int PRED_START = 14;
     inline constexpr int PREY_MAX   = 900;
-    inline constexpr int PRED_MAX   = 400;
+    inline constexpr int PRED_MAX   = 250;
 
     // "Immigration": if a species falls below its floor, a few newcomers
     // appear (mutated descendants of survivors, or fresh random brains if the
     // species died out). Keeps the experiment from ending in a dead world.
-    inline constexpr int PREY_FLOOR = 20;
-    inline constexpr int PRED_FLOOR = 6;
+    //
+    // Keep these LOW. The floor is an extinction safety-net, not a steady
+    // supply: if the prey floor is high relative to predation, predators feed
+    // on the immigration drip forever, prey never rise above the floor to
+    // reproduce, and prey evolution stalls. A small floor lets prey actually
+    // bloom (and evolve) in the gaps between predator booms.
+    inline constexpr int PREY_FLOOR = 12;
+    inline constexpr int PRED_FLOOR = 4;
 
     // normalisation for the relative-velocity brain inputs (px/s -> ~[-1,1])
     inline constexpr float VEL_NORM = 200.f;
@@ -68,28 +76,46 @@ namespace cfg
         float parentKeep;   // parent keeps parentKeep * energy (rest = birth cost)
     };
 
+    // Defaults reasoning (prey): cruising at ~60 % throttle burns
+    // 1.4 + 3.8 * 0.36 ≈ 2.8 energy/s, one food item is worth 30, so a prey
+    // must stumble into food roughly every 10 s to break even — easy once
+    // brains learn to steer, survivable while they are still random.
+    //
+    // maxSpeed 100 is close to the predator's 105, and prey out-turn
+    // predators (4.5 vs 3.5 rad/s): a *skilled* prey can escape, so survival
+    // correlates with brain quality. That correlation is what lets prey
+    // evolve at all. reproFrac 0.72 lets a lucky survivor breed sooner and
+    // seed the next, better generation faster.
     inline constexpr SpeciesCfg PREY {
-        /* maxSpeed   */  90.f,
+        /* maxSpeed   */ 100.f,
         /* vision     */ 110.f,
         /* size       */   5.f,
         /* turnRate   */   4.5f,
-        /* baseCost   */   1.6f,
-        /* moveCost   */   4.0f,
+        /* baseCost   */   1.4f,
+        /* moveCost   */   3.8f,
         /* capacity   */ 110.f,
-        /* reproFrac  */   0.80f,
+        /* reproFrac  */   0.72f,
         /* childFrac  */   0.40f,
         /* parentKeep */   0.45f,
     };
 
+    // Defaults reasoning (predators): faster and longer-sighted than prey
+    // (else hunting can never work), but they MUST depend on catching prey
+    // or their numbers never self-limit. baseCost 2.4 means an idle predator
+    // starves in 170 / 2.4 ≈ 70 s (was a lazy ~140 s), so when prey get
+    // scarce the predator population actually crashes instead of pinning at
+    // the cap — restoring the boom/bust cycle that gives prey room to evolve.
+    // A full-throttle chase burns 2.4 + 6.0 = 8.4 energy/s; a kill pays ~60,
+    // so a hunter has ~7 s of chasing per meal: sprint-and-rest wins.
     inline constexpr SpeciesCfg PRED {
         /* maxSpeed   */ 105.f,
         /* vision     */ 150.f,
         /* size       */   7.f,
         /* turnRate   */   3.5f,
-        /* baseCost   */   1.2f,
-        /* moveCost   */   4.5f,
+        /* baseCost   */   2.4f,
+        /* moveCost   */   6.0f,
         /* capacity   */ 170.f,
-        /* reproFrac  */   0.80f,
+        /* reproFrac  */   0.82f,
         /* childFrac  */   0.40f,
         /* parentKeep */   0.45f,
     };

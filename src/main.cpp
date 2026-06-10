@@ -314,7 +314,8 @@ static void drawPanel(sf::RenderWindow& window, const Simulation& sim,
         window.draw(makeText(*font,
                              ".  single step (paused)      R  restart      S / O  save / load",
                              12, { x, cy + 18.f }, pal::textDim));
-        std::snprintf(buf, sizeof(buf), "V  vision rings (%s)      T  tuning sliders (%s)",
+        std::snprintf(buf, sizeof(buf),
+                      "V  vision rings (%s)      T  tuning sliders (%s)      D  defaults",
                       showVision ? "on" : "off", showTuning ? "on" : "off");
         window.draw(makeText(*font, buf, 12, { x, cy + 36.f }, pal::textDim));
         window.draw(makeText(*font,
@@ -448,6 +449,12 @@ int main()
                     break;
                 case sf::Keyboard::Key::T:
                     tuning.visible = !tuning.visible;
+                    break;
+                case sf::Keyboard::Key::D:
+                    // all sliders are bound into cfg::tune, whose defaults
+                    // are the balanced values from Config.hpp
+                    cfg::tune = cfg::Tunables{};
+                    setStatus("tuning reset to defaults");
                     break;
                 case sf::Keyboard::Key::F:
                     follow = !follow;
