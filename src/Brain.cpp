@@ -5,11 +5,31 @@
 #include "Config.hpp"
 #include "Utils.hpp"
 
+namespace
+{
+    // Xavier-style per-parameter init scale. With tanh neurons, drawing each
+    // weight from N(0, 1/sqrt(fan_in)) keeps the pre-activation sum near unit
+    // variance, so neurons start in their *responsive* range instead of
+    // saturated at +/-1 (where mutations barely change behaviour). Biases
+    // start small. The flat 0.5 it replaces saturated every hidden neuron at
+    // birth, which made early evolution slow and rugged.
+    float initSigma(int i)
+    {
+        constexpr int w1End = Brain::HID * Brain::IN;                 // input->hidden
+        constexpr int b1End = w1End + Brain::HID;                     // hidden biases
+        constexpr int w2End = b1End + Brain::OUT * Brain::HID;        // hidden->output
+        if (i < w1End) return 1.f / std::sqrt(float(Brain::IN));      // fan-in = IN
+        if (i < b1End) return 0.1f;                                   // hidden bias
+        if (i < w2End) return 1.f / std::sqrt(float(Brain::HID));     // fan-in = HID
+        return 0.1f;                                                  // output bias
+    }
+}
+
 Brain::Brain()
 {
     m_w.resize(N_PARAMS);
-    for (float& w : m_w)
-        w = nrand(0.f, cfg::BRAIN_INIT_SIGMA);
+    for (int i = 0; i < N_PARAMS; ++i)
+        m_w[i] = nrand(0.f, initSigma(i));
 }
 
 Brain Brain::offspring() const
@@ -17,12 +37,13 @@ Brain Brain::offspring() const
     Brain child = *this;
     child.m_mem[0] = 0.f;            // a newborn starts with a blank memory
     child.m_mem[1] = 0.f;
-    for (float& w : child.m_w)
+    for (int i = 0; i < N_PARAMS; ++i)
     {
-        w += nrand(0.f, cfg::tune.mutationSigma);
-        // rare macro-mutation: rewire the connection completely
+        child.m_w[i] += nrand(0.f, cfg::tune.mutationSigma);
+        // rare macro-mutation: rewire one connection — drawn at the layer's
+        // own scale so a reset weight isn't an outlier that wrecks the brain
         if (frand(0.f, 1.f) < cfg::BRAIN_RESET_PROB)
-            w = nrand(0.f, cfg::BRAIN_INIT_SIGMA);
+            child.m_w[i] = nrand(0.f, initSigma(i));
     }
     return child;
 }

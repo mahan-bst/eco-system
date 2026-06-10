@@ -55,9 +55,11 @@ namespace cfg
     inline constexpr float VEL_NORM = 200.f;
 
     // ----- evolution ----------------------------------------------------------
-    inline constexpr float BRAIN_INIT_SIGMA = 0.5f;   // fresh random weights
-    inline constexpr float MUTATION_SIGMA   = 0.08f;  // gaussian noise per weight
-    inline constexpr float BRAIN_RESET_PROB = 0.02f;  // chance to rewire a weight
+    // (fresh weights use Xavier/fan-in scaling, computed per layer in Brain.cpp)
+    inline constexpr float MUTATION_SIGMA   = 0.08f;   // gaussian noise per weight
+    inline constexpr float BRAIN_RESET_PROB = 0.005f;  // chance to rewire a weight
+                                                       // ~1 of 194 weights per birth
+                                                       // (was 0.02 = ~4, too violent)
 
     // ----- species bodies (identical for every individual) -------------------
     struct SpeciesCfg
