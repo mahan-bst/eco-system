@@ -8,7 +8,9 @@ inline constexpr float PI = 3.14159265358979f;
 
 inline std::mt19937& rng()
 {
-    static std::mt19937 gen{ std::random_device{}() };
+    // thread_local: each worker thread (see headless training) gets its own
+    // independent stream, so parallel simulations don't race on one generator
+    thread_local std::mt19937 gen{ std::random_device{}() };
     return gen;
 }
 

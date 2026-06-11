@@ -14,6 +14,7 @@ add_executable(MyGame
     src/BrainView.cpp
     src/Champions.cpp
     src/Charts.cpp
+    src/Headless.cpp
     src/Leaderboard.cpp
     src/SaveState.cpp
     src/SliderPanel.cpp

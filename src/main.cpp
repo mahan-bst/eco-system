@@ -20,6 +20,7 @@
 #include "BrainView.hpp"
 #include "Config.hpp"
 #include "Charts.hpp"
+#include "Headless.hpp"
 #include "History.hpp"
 #include "Leaderboard.hpp"
 #include "Lineage.hpp"
@@ -336,8 +337,12 @@ static void drawPanel(sf::RenderWindow& window, const Simulation& sim,
 
 // ----- entry point ----------------------------------------------------------------
 
-int main()
+int main(int argc, char** argv)
 {
+    // headless training mode (--train <minutes> [outfile]); skips the window
+    if (const int code = Headless::run(argc, argv); code >= 0)
+        return code;
+
     sf::ContextSettings settings;
     settings.antiAliasingLevel = 8;
 

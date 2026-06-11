@@ -135,6 +135,25 @@ the rest, you watch the whole population converge to its colour in real time.
 A sudden splash of a new colour that spreads is a beneficial mutation taking
 over. Brightness still encodes energy, so starving creatures dim out as before.
 
+## Headless training (`--train`)
+
+Evolve a population offline, with no window and no rendering, as fast as the
+CPU allows — then open the result in the GUI:
+
+```
+MyGame --train 5                 # 5 sim-minutes -> trained.eco
+MyGame --train 10 hunters.eco    # 10 sim-minutes -> hunters.eco
+MyGame --train=3 -o world.eco -j 8
+```
+
+It runs **many independent worlds in parallel** — one per CPU thread by
+default (or `-j N`) — which saturates every core instead of just one. Every
+world is saved to its own numbered file (`trained_0.eco`, `trained_1.eco`, …),
+and a per-world scoreboard reports how evolved each one got so you can pick a
+favourite. Great for presentations: train a batch beforehand and `O`-load the
+best one live instead of waiting at ×32. Build **Release** for this — Debug is
+far slower.
+
 ## Building
 
 All knobs live in [src/Config.hpp](src/Config.hpp); the network topology is
