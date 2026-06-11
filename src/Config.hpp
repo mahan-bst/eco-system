@@ -8,16 +8,25 @@
 namespace cfg
 {
     // ----- window / layout --------------------------------------------------
-    inline constexpr unsigned WINDOW_W = 1600;
-    inline constexpr unsigned WINDOW_H = 900;
+    inline constexpr unsigned WINDOW_W = 1920;
+    inline constexpr unsigned WINDOW_H = 1080;
 
-    inline constexpr float WORLD_X = 16.f;    // world viewport inside the window
-    inline constexpr float WORLD_Y = 16.f;
-    inline constexpr float WORLD_W = 1080.f;  // simulation space (local coords 0..W, 0..H)
+    // Simulation space (the coordinates all sim logic and saves use).
+    // Deliberately unchanged when the window grew: the world is *displayed*
+    // scaled up instead, so older .eco saves keep working unmodified.
+    inline constexpr float WORLD_W = 1080.f;
     inline constexpr float WORLD_H = 868.f;
 
-    inline constexpr float PANEL_X = WORLD_X + WORLD_W + 16.f;
-    inline constexpr float PANEL_W = WINDOW_W - PANEL_X - 16.f;
+    // where the world is displayed inside the window (aspect-correct upscale)
+    inline constexpr float VIEW_X = 16.f;
+    inline constexpr float VIEW_Y = 16.f;
+    inline constexpr float VIEW_H = float(WINDOW_H) - 32.f;        // 1048
+    inline constexpr float VIEW_W = VIEW_H * WORLD_W / WORLD_H;    // ~1304
+
+    // right-hand column: header, docked tool panels, charts, controls
+    inline constexpr float PANEL_X = VIEW_X + VIEW_W + 16.f;
+    inline constexpr float PANEL_Y = 16.f;
+    inline constexpr float PANEL_W = float(WINDOW_W) - PANEL_X - 16.f;   // ~568
 
     // ----- time -------------------------------------------------------------
     inline constexpr float FIXED_DT = 1.f / 60.f;          // one simulation tick

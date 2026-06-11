@@ -249,7 +249,7 @@ static void drawWorld(sf::RenderWindow& window, const Simulation& sim,
 static void drawPanel(sf::RenderWindow& window, const Simulation& sim,
                       const History& history, const sf::Font* font,
                       bool paused, int speedMult, bool showVision, bool showTuning,
-                      bool lineageColor, const std::string& status)
+                      bool lineageColor, float chartsTop, const std::string& status)
 {
     const float x = cfg::PANEL_X;
     char buf[128];
@@ -286,9 +286,15 @@ static void drawPanel(sf::RenderWindow& window, const Simulation& sim,
                                  sf::Color(255, 196, 84)));
     }
 
-    // charts
-    const float chartH = 218.f, gap = 10.f;
-    float cy = 118.f;
+    // controls pinned to the bottom of the window; charts fill the gap above,
+    // starting below whatever tool panels are docked (chartsTop)
+    const float gap = 10.f;
+    const float ctrlLineH = 18.f;
+    const float ctrlY = float(cfg::WINDOW_H) - 16.f - ctrlLineH * 5.f;
+
+    const float avail = (ctrlY - gap) - chartsTop;
+    const float chartH = std::max(74.f, (avail - 2.f * gap) / 3.f);
+    float cy = chartsTop;
 
     drawChart(window, { { x, cy }, { cfg::PANEL_W, chartH } }, "Population",
               history.samples(),
@@ -312,26 +318,25 @@ static void drawPanel(sf::RenderWindow& window, const Simulation& sim,
               { { &Sample::predEnergy, pal::statEnergy, "energy" },
                 { &Sample::predAge,    pal::statAge,    "age"    } },
               false, font);
-    cy += chartH + 14.f;
 
     if (font)
     {
         window.draw(makeText(*font, "Space  pause / resume      + / -  faster / slower",
-                             12, { x, cy }, pal::textDim));
+                             12, { x, ctrlY }, pal::textDim));
         window.draw(makeText(*font,
                              ".  single step (paused)      R  restart      S / O  save / load",
-                             12, { x, cy + 18.f }, pal::textDim));
+                             12, { x, ctrlY + ctrlLineH }, pal::textDim));
         std::snprintf(buf, sizeof(buf),
                       "V  vision (%s)   T  tuning (%s)   D  defaults   C  lineage colour (%s)",
                       showVision ? "on" : "off", showTuning ? "on" : "off",
                       lineageColor ? "on" : "off");
-        window.draw(makeText(*font, buf, 12, { x, cy + 36.f }, pal::textDim));
+        window.draw(makeText(*font, buf, 12, { x, ctrlY + ctrlLineH * 2.f }, pal::textDim));
         window.draw(makeText(*font,
                              "left-click  inspect a brain      right-click  drop food",
-                             12, { x, cy + 54.f }, pal::textDim));
+                             12, { x, ctrlY + ctrlLineH * 3.f }, pal::textDim));
         window.draw(makeText(*font,
                              "F  follow cam      L  leaderboard      scroll  zoom      Esc  deselect",
-                             12, { x, cy + 72.f }, pal::textDim));
+                             12, { x, ctrlY + ctrlLineH * 4.f }, pal::textDim));
     }
 }
 
@@ -366,11 +371,12 @@ int main(int argc, char** argv)
         if (font.openFromFile(p)) { hasFont = true; break; }
 
     // the world is drawn through its own view, so it is clipped to its
-    // viewport and entities can be drawn in local (0..W, 0..H) coordinates
+    // viewport, entities are drawn in local sim coordinates (0..W, 0..H),
+    // and the whole thing is displayed scaled up into the VIEW_* rect
     sf::View worldView(sf::FloatRect({ 0.f, 0.f }, { cfg::WORLD_W, cfg::WORLD_H }));
     worldView.setViewport(sf::FloatRect(
-        { cfg::WORLD_X / cfg::WINDOW_W, cfg::WORLD_Y / cfg::WINDOW_H },
-        { cfg::WORLD_W / cfg::WINDOW_W, cfg::WORLD_H / cfg::WINDOW_H }));
+        { cfg::VIEW_X / cfg::WINDOW_W, cfg::VIEW_Y / cfg::WINDOW_H },
+        { cfg::VIEW_W / cfg::WINDOW_W, cfg::VIEW_H / cfg::WINDOW_H }));
 
     Simulation sim;
     History history;
@@ -388,14 +394,13 @@ int main(int argc, char** argv)
     tuning.add("prey speed",  &cfg::tune.preySpeed,    30.f, 180.f,  "%.0f");
     tuning.add("pred vision", &cfg::tune.predVision,   30.f, 250.f,  "%.0f");
     tuning.add("pred speed",  &cfg::tune.predSpeed,    30.f, 180.f,  "%.0f");
-    tuning.setPosition({ cfg::WORLD_X + 12.f,
-                         cfg::WORLD_Y + cfg::WORLD_H - tuning.height() - 12.f });
-
-    const sf::Vector2f brainViewPos(cfg::WORLD_X + 12.f, cfg::WORLD_Y + 12.f);
+    // the tool panels (brain view / leaderboard / sliders) dock into the
+    // right-hand column below the header; their positions are laid out each
+    // frame depending on which ones are open (see the layout block in the loop)
+    const float dockTop = cfg::PANEL_Y + 116.f;   // header height
+    sf::Vector2f brainViewPos(cfg::PANEL_X, dockTop);
 
     Leaderboard leaderboard;
-    leaderboard.setPosition({ cfg::WORLD_X + cfg::WORLD_W - 252.f - 12.f,
-                              cfg::WORLD_Y + 12.f });
 
     Selection selection;
     bool paused = false;
@@ -597,8 +602,25 @@ int main(int argc, char** argv)
 
         const Animal* selected = selection.resolve(sim);
 
+        // ----- dock layout: stack open tool panels down the right column -----
+        float dockY = dockTop;
+        if (selected)
+        {
+            brainViewPos = { cfg::PANEL_X, dockY };
+            dockY += BrainView::HEIGHT + 10.f;
+        }
         if (leaderboard.visible)
+        {
+            leaderboard.setPosition({ cfg::PANEL_X, dockY });
             leaderboard.update(sim);
+            dockY += leaderboard.height() + 10.f;
+        }
+        if (tuning.visible)
+        {
+            tuning.setPosition({ cfg::PANEL_X, dockY });
+            dockY += tuning.height() + 10.f;
+        }
+        const float chartsTop = dockY;   // charts use whatever space is left
 
         // the creature we were filming just vanished — break the bad news
         if (hadSelection && !selected && follow)
@@ -655,23 +677,23 @@ int main(int argc, char** argv)
         drawWorld(window, sim, showVision, lineageColor, selected, selection.isPred);
         window.setView(window.getDefaultView());
 
-        sf::RectangleShape border({ cfg::WORLD_W, cfg::WORLD_H });
-        border.setPosition({ cfg::WORLD_X, cfg::WORLD_Y });
+        sf::RectangleShape border({ cfg::VIEW_W, cfg::VIEW_H });
+        border.setPosition({ cfg::VIEW_X, cfg::VIEW_Y });
         border.setFillColor(sf::Color::Transparent);
         border.setOutlineColor(pal::worldBorder);
         border.setOutlineThickness(1.f);
         window.draw(border);
 
-        // cinematic letterbox while the follow cam is engaged
+        // cinematic letterbox while the follow cam is engaged (window coords)
         const float follow01 = clampf((camZoom - 1.f) / 1.8f, 0.f, 1.f);
         if (follow01 > 0.02f)
         {
-            const float bh = 44.f * follow01;
-            sf::RectangleShape barShape({ cfg::WORLD_W, bh });
+            const float bh = 56.f * follow01;
+            sf::RectangleShape barShape({ cfg::VIEW_W, bh });
             barShape.setFillColor(sf::Color(0, 0, 0, std::uint8_t(165 * follow01)));
-            barShape.setPosition({ cfg::WORLD_X, cfg::WORLD_Y });
+            barShape.setPosition({ cfg::VIEW_X, cfg::VIEW_Y });
             window.draw(barShape);
-            barShape.setPosition({ cfg::WORLD_X, cfg::WORLD_Y + cfg::WORLD_H - bh });
+            barShape.setPosition({ cfg::VIEW_X, cfg::VIEW_Y + cfg::VIEW_H - bh });
             window.draw(barShape);
 
             if (hasFont && selected && follow01 > 0.6f)
@@ -683,34 +705,34 @@ int main(int argc, char** argv)
                               selection.isPred ? "PREDATOR" : "PREY",
                               static_cast<unsigned long long>(selected->id),
                               selected->energy, selected->age);
-                sf::Text title = makeText(font, buf, 15, { 0.f, 0.f },
+                sf::Text title = makeText(font, buf, 16, { 0.f, 0.f },
                                           selection.isPred
                                               ? sf::Color(235, 105, 86, a)
                                               : sf::Color(96, 196, 208, a));
-                title.setPosition({ cfg::WORLD_X +
-                                        (cfg::WORLD_W -
+                title.setPosition({ cfg::VIEW_X +
+                                        (cfg::VIEW_W -
                                          title.getLocalBounds().size.x) / 2.f,
-                                    cfg::WORLD_Y + bh / 2.f - 11.f });
+                                    cfg::VIEW_Y + bh / 2.f - 11.f });
                 window.draw(title);
 
                 // blinking LIVE tag, because every nature documentary needs one
                 const std::uint8_t blink =
                     std::sin(liveBlink * 4.f) > 0.f ? a : std::uint8_t(a / 5);
-                window.draw(makeText(font, "LIVE", 14,
-                                     { cfg::WORLD_X + 18.f,
-                                       cfg::WORLD_Y + bh / 2.f - 10.f },
+                window.draw(makeText(font, "LIVE", 15,
+                                     { cfg::VIEW_X + 18.f,
+                                       cfg::VIEW_Y + bh / 2.f - 10.f },
                                      sf::Color(255, 70, 70, blink)));
 
                 window.draw(makeText(font, "scroll to zoom", 11,
-                                     { cfg::WORLD_X + 18.f,
-                                       cfg::WORLD_Y + cfg::WORLD_H - bh / 2.f - 8.f },
+                                     { cfg::VIEW_X + 18.f,
+                                       cfg::VIEW_Y + cfg::VIEW_H - bh / 2.f - 8.f },
                                      sf::Color(190, 200, 210, std::uint8_t(a / 2))));
             }
         }
 
         drawPanel(window, sim, history, hasFont ? &font : nullptr,
                   paused, cfg::SPEED_STEPS[speedIdx], showVision, tuning.visible,
-                  lineageColor, status);
+                  lineageColor, chartsTop, status);
 
         if (selected)
             BrainView::draw(window, brainViewPos, *selected, selection.isPred,

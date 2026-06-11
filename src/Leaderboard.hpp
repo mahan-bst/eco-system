@@ -26,7 +26,11 @@ public:
         int  champIndex = -1;       // Spawn: index into that species' archive
     };
 
-    void setPosition(sf::Vector2f pos) { m_pos = pos; }
+    void setPosition(sf::Vector2f pos)
+    {
+        if (pos != m_pos) { m_pos = pos; markDirty(); }   // rows cache their y
+    }
+    float height() const { return m_height; }
 
     void markDirty() { m_sinceRebuild = REBUILD_EVERY; }   // force a rebuild
     void update(const Simulation& sim);   // rebuild rows for the active tab
