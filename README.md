@@ -78,6 +78,10 @@ with a white ring and its vision circle. Click empty space to deselect.
 | `D` | reset all tuning sliders to the balanced defaults |
 | `S` | save the world to a `.eco` file (a file dialog asks where) |
 | `O` | load a previously saved world |
+| timeline bar | drag the bar along the bottom of the world to **rewind** to any recorded moment |
+| `←` / `→` | step one snapshot back / forward while reviewing |
+| `Space` | (while reviewing) jump back to the present and resume |
+| `B` | (while reviewing) **branch** — make this past moment the new present and continue from it |
 | `R` | restart the simulation |
 | left click | select a creature / open its brain |
 | right click | drop a burst of food at the cursor |
@@ -95,13 +99,34 @@ The tuning panel exposes food spawn rate, food energy, mutation strength,
 prey/predator metabolism multipliers, the predator meal-gain multiplier, and
 each species' vision radius and max speed — all applied instantly.
 
+## Time travel (timeline scrubber)
+
+The whole evolution is recorded as you watch. A scrubber bar runs along the
+bottom of the world: **drag it to rewind** to any recorded moment — the
+populations, brains, lineage colours, charts and leaderboard all snap back to
+exactly how they were. Use `←`/`→` to step snapshot-by-snapshot for fine
+pinpointing. Reviewing is **non-destructive**: press `Space` to jump back to
+the present and keep going, or press `B` to **branch** — adopt the moment
+you're viewing as the new present and continue evolving from there (handy for
+"what if I rewind to just before the predators crashed and let it run again").
+
+Under the hood it snapshots the full world state (the same serializer used for
+saves) into a bounded ring that halves its resolution as it fills, so an
+arbitrarily long run always fits. **The recorded history is saved inside the
+`.eco` file** (after the world) and reloaded with `O`, so you can come back to a
+trained world and still scrub its whole evolution — and headless-trained files
+carry their history too. Note this makes `.eco` files much larger (each snapshot
+is a full world); lower `MAX_SNAPS` in `Timeline.hpp` if you want smaller files.
+
 ## Save / load
 
 `S` snapshots the *entire* world into a binary `.eco` file: simulation time,
 every food item, every prey and predator (position, heading, energy, age, id)
-including their full brain weights, plus the current slider values. `O` loads
-one back. Very handy for presentations: evolve a competent population at ×32
-beforehand, save it, and open the trained world live instead of waiting.
+including their full brain weights, plus the current slider values — **and the
+scrubbable timeline and the charts**, so a reloaded world keeps its whole
+recorded evolution and its chart curves. `O` loads one back. Very handy for
+presentations: evolve a competent population at ×32 beforehand, save it, and
+open the trained world live instead of waiting.
 Loading validates the file and leaves the running world untouched if the file
 is corrupt or from an incompatible build (the brain topology is checked).
 Saves from older versions of the *format* still load — fields that did not

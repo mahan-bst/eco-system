@@ -11,8 +11,10 @@
 #include <vector>
 
 #include "Config.hpp"
+#include "History.hpp"
 #include "SaveState.hpp"
 #include "Simulation.hpp"
+#include "Timeline.hpp"
 
 namespace
 {
@@ -83,10 +85,13 @@ int Headless::run(int argc, char** argv)
                 workers, minutes, steps, path.c_str());
     std::fflush(stdout);
 
-    // each worker evolves its own independent world (random generation zero)
+    // each worker evolves its own independent world (random generation zero),
+    // recording its evolution into its own timeline (saved with the world)
     const std::size_t nWorlds = std::size_t(workers);
     std::vector<Simulation> worlds(nWorlds);   // 'nWorlds' (a variable) avoids
                                                // the most-vexing-parse
+    std::vector<Timeline> timelines(nWorlds);
+    std::vector<History>  histories(nWorlds);
 
     std::atomic<long long> doneSteps{ 0 };
     std::atomic<int> finished{ 0 };
@@ -100,9 +105,13 @@ int Headless::run(int argc, char** argv)
         pool.emplace_back([&, w]
         {
             Simulation& s = worlds[std::size_t(w)];
+            Timeline& tl  = timelines[std::size_t(w)];
+            History&  hi  = histories[std::size_t(w)];
             for (long long i = 0; i < steps; ++i)
             {
                 s.step(cfg::FIXED_DT);
+                tl.record(s);                   // snapshot the evolution
+                hi.update(s, cfg::FIXED_DT);     // and the chart series
                 if ((i & 1023) == 1023)     // report in batches, not every step
                     doneSteps.fetch_add(1024, std::memory_order_relaxed);
             }
@@ -142,7 +151,8 @@ int Headless::run(int argc, char** argv)
         const Simulation& s = worlds[std::size_t(w)];
         const double sc = worldScore(s);
         const std::string out = numbered(path, w);
-        const bool ok = SaveState::save(s, out);
+        const bool ok = SaveState::save(s, timelines[std::size_t(w)],
+                                        histories[std::size_t(w)], out);
         if (ok) ++saved;
         std::printf("[train]   world %2d | prey %4zu pred %4zu | best %d / %d kids | score %5.1f | %s%s\n",
                     w, s.preyList().size(), s.predList().size(),

@@ -18,6 +18,7 @@ add_executable(MyGame
     src/Leaderboard.cpp
     src/SaveState.cpp
     src/SliderPanel.cpp
+    src/Timeline.cpp
 )
 
 find_package(SFML 3 COMPONENTS System Window Graphics Audio Network REQUIRED)

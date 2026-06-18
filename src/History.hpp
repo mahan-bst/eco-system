@@ -1,5 +1,9 @@
 #pragma once
 
+#include <cstdint>
+#include <cstring>
+#include <istream>
+#include <ostream>
 #include <vector>
 
 #include "Simulation.hpp"
@@ -37,6 +41,53 @@ public:
 
     const std::vector<Sample>& samples() const { return m_samples; }
 
+    // drop chart samples after time t (used when branching the timeline)
+    void truncate(float t)
+    {
+        while (!m_samples.empty() && m_samples.back().t > t)
+            m_samples.pop_back();
+        m_accum = 0.f;
+    }
+
+    // The chart series is saved inside the .eco file (after the timeline) so
+    // the charts survive a save/open round-trip. Sample is plain floats, so a
+    // flat blob is fine.
+    void serialize(std::ostream& out) const
+    {
+        out.write(HS_MAGIC, 6);
+        const std::uint32_t n = std::uint32_t(m_samples.size());
+        out.write(reinterpret_cast<const char*>(&n), sizeof n);
+        out.write(reinterpret_cast<const char*>(&m_interval), sizeof m_interval);
+        if (n)
+            out.write(reinterpret_cast<const char*>(m_samples.data()),
+                      std::streamsize(n * sizeof(Sample)));
+    }
+
+    bool deserialize(std::istream& in)   // leaves charts empty on failure
+    {
+        reset();
+        char magic[6];
+        in.read(magic, 6);
+        if (!in || std::memcmp(magic, HS_MAGIC, 6) != 0) { reset(); return false; }
+
+        std::uint32_t n = 0;
+        float interval = 0.5f;
+        in.read(reinterpret_cast<char*>(&n), sizeof n);
+        in.read(reinterpret_cast<char*>(&interval), sizeof interval);
+        if (!in || n > 1000000u) { reset(); return false; }
+
+        std::vector<Sample> samples(n);
+        if (n)
+            in.read(reinterpret_cast<char*>(samples.data()),
+                    std::streamsize(n * sizeof(Sample)));
+        if (!in) { reset(); return false; }
+
+        m_samples = std::move(samples);
+        m_interval = interval;
+        m_accum = 0.f;
+        return true;
+    }
+
 private:
     void record(const Simulation& sim)
     {
@@ -63,6 +114,7 @@ private:
     }
 
     static constexpr std::size_t MAX_SAMPLES = 1400;
+    static constexpr char HS_MAGIC[6] = { 'E', 'C', 'O', 'H', 'S', '1' };
 
     std::vector<Sample> m_samples;
     float m_interval = 0.5f;

@@ -19,6 +19,8 @@ struct Series
 //   sharedScale = false : each series is auto-scaled to its own min..max,
 //                         which makes *trends* of differently-scaled stats
 //                         comparable in a single chart
+//   markerT >= 0        : draw a vertical "you are here" line at that sim time
+//                         (used while rewinding the timeline)
 void drawChart(sf::RenderTarget& rt, const sf::FloatRect& rect, const char* title,
                const std::vector<Sample>& samples, const std::vector<Series>& series,
-               bool sharedScale, const sf::Font* font);
+               bool sharedScale, const sf::Font* font, float markerT = -1.f);

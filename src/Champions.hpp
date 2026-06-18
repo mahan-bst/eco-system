@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <iosfwd>
+#include <string>
 #include <vector>
 
 #include "Brain.hpp"
@@ -42,8 +43,8 @@ public:
     // a random archived brain, mutated — for crash reseeding (caller: !empty)
     Brain reseed() const;
 
-    void serialize(std::ostream& out) const;
-    bool deserialize(std::istream& in);   // leaves the archive empty on failure
+    void serialize(std::string& out) const;   // appends to a byte buffer
+    bool deserialize(std::istream& in);        // leaves the archive empty on failure
 
 private:
     void sortDesc();

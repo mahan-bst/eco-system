@@ -14,7 +14,7 @@ static sf::Text makeText(const sf::Font& font, const std::string& str,
 
 void drawChart(sf::RenderTarget& rt, const sf::FloatRect& rect, const char* title,
                const std::vector<Sample>& samples, const std::vector<Series>& series,
-               bool sharedScale, const sf::Font* font)
+               bool sharedScale, const sf::Font* font, float markerT)
 {
     // frame
     sf::RectangleShape bg(rect.size);
@@ -104,6 +104,35 @@ void drawChart(sf::RenderTarget& rt, const sf::FloatRect& rect, const char* titl
             strip[i] = sf::Vertex{ { x, y }, s.color };
         }
         rt.draw(strip);
+    }
+
+    // "you are here" marker: a vertical line at markerT while rewinding.
+    // We locate markerT by interpolating the samples' times into a fractional
+    // index, so the line lands exactly on the plotted curves.
+    if (markerT >= 0.f)
+    {
+        float f;
+        if (markerT <= samples.front().t)      f = 0.f;
+        else if (markerT >= samples.back().t)  f = float(n - 1);
+        else
+        {
+            std::size_t i = 0;
+            while (i + 1 < n && samples[i + 1].t < markerT) ++i;
+            const float t0 = samples[i].t, t1 = samples[i + 1].t;
+            f = float(i) + (t1 > t0 ? (markerT - t0) / (t1 - t0) : 0.f);
+        }
+        const float x = plot.position.x + plot.size.x * (f / float(n - 1));
+
+        sf::RectangleShape line({ 1.5f, plot.size.y });
+        line.setPosition({ x, plot.position.y });
+        line.setFillColor(sf::Color(255, 196, 84, 235));
+        rt.draw(line);
+
+        sf::CircleShape dot(3.f);
+        dot.setOrigin({ 3.f, 3.f });
+        dot.setPosition({ x, plot.position.y });
+        dot.setFillColor(sf::Color(255, 196, 84));
+        rt.draw(dot);
     }
 
     // axis labels

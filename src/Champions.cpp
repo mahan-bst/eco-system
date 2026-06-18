@@ -15,9 +15,9 @@ namespace
     }
 
     template <class T>
-    void wr(std::ostream& out, const T& v)
+    void wr(std::string& out, const T& v)
     {
-        out.write(reinterpret_cast<const char*>(&v), sizeof v);
+        out.append(reinterpret_cast<const char*>(&v), sizeof v);
     }
 
     template <class T>
@@ -69,7 +69,7 @@ Brain ChampionArchive::reseed() const
     return m_list[i].brain.offspring();
 }
 
-void ChampionArchive::serialize(std::ostream& out) const
+void ChampionArchive::serialize(std::string& out) const
 {
     wr(out, std::uint32_t(m_list.size()));
     for (const auto& c : m_list)
@@ -78,7 +78,8 @@ void ChampionArchive::serialize(std::ostream& out) const
         wr(out, std::int32_t(c.offspring));
         wr(out, c.age);
         wr(out, c.fitness);
-        for (float w : c.brain.weights()) wr(out, w);
+        const auto& w = c.brain.weights();
+        out.append(reinterpret_cast<const char*>(w.data()), w.size() * sizeof(float));
     }
 }
 

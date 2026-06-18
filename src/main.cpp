@@ -24,6 +24,7 @@
 #include "History.hpp"
 #include "Leaderboard.hpp"
 #include "Lineage.hpp"
+#include "Timeline.hpp"
 #include "SaveState.hpp"
 #include "Simulation.hpp"
 #include "SliderPanel.hpp"
@@ -249,7 +250,8 @@ static void drawWorld(sf::RenderWindow& window, const Simulation& sim,
 static void drawPanel(sf::RenderWindow& window, const Simulation& sim,
                       const History& history, const sf::Font* font,
                       bool paused, int speedMult, bool showVision, bool showTuning,
-                      bool lineageColor, float chartsTop, const std::string& status)
+                      bool lineageColor, float chartsTop, float markerT,
+                      const std::string& status)
 {
     const float x = cfg::PANEL_X;
     char buf[128];
@@ -301,7 +303,7 @@ static void drawPanel(sf::RenderWindow& window, const Simulation& sim,
               { { &Sample::preyCount, pal::prey,     "prey",      true },
                 { &Sample::predCount, pal::predator, "predators", true },
                 { &Sample::foodCount, scaled(pal::food, 0.55f), "food", true } },
-              true, font);
+              true, font, markerT);
     cy += chartH + gap;
 
     drawChart(window, { { x, cy }, { cfg::PANEL_W, chartH } },
@@ -309,7 +311,7 @@ static void drawPanel(sf::RenderWindow& window, const Simulation& sim,
               history.samples(),
               { { &Sample::preyEnergy, pal::statEnergy, "energy" },
                 { &Sample::preyAge,    pal::statAge,    "age"    } },
-              false, font);
+              false, font, markerT);
     cy += chartH + gap;
 
     drawChart(window, { { x, cy }, { cfg::PANEL_W, chartH } },
@@ -317,7 +319,7 @@ static void drawPanel(sf::RenderWindow& window, const Simulation& sim,
               history.samples(),
               { { &Sample::predEnergy, pal::statEnergy, "energy" },
                 { &Sample::predAge,    pal::statAge,    "age"    } },
-              false, font);
+              false, font, markerT);
 
     if (font)
     {
@@ -402,6 +404,11 @@ int main(int argc, char** argv)
 
     Leaderboard leaderboard;
 
+    // time-travel recorder + its scrubber bar along the bottom of the world
+    Timeline timeline;
+    timeline.setBarRect({ { cfg::VIEW_X + 1.f, cfg::VIEW_Y + cfg::VIEW_H - 30.f },
+                          { cfg::VIEW_W - 2.f, 26.f } });
+
     Selection selection;
     bool paused = false;
     bool showVision = false;
@@ -440,7 +447,30 @@ int main(int argc, char** argv)
                 switch (key->code)
                 {
                 case sf::Keyboard::Key::Space:
-                    paused = !paused;
+                    if (timeline.reviewing())       // leave review at the present
+                    {
+                        timeline.returnToPresent(sim);
+                        paused = false;
+                        setStatus("back to present");
+                    }
+                    else
+                        paused = !paused;
+                    break;
+                case sf::Keyboard::Key::Left:
+                    if (timeline.reviewing()) timeline.stepSnapshot(sim, -1);
+                    break;
+                case sf::Keyboard::Key::Right:
+                    if (timeline.reviewing()) timeline.stepSnapshot(sim, +1);
+                    break;
+                case sf::Keyboard::Key::B:
+                    if (timeline.reviewing())       // continue from this moment
+                    {
+                        const float t = timeline.branch(sim);
+                        history.truncate(t);
+                        selection.clear();
+                        paused = false;
+                        setStatus("branched - new timeline from here");
+                    }
                     break;
                 case sf::Keyboard::Key::Equal:
                 case sf::Keyboard::Key::Add:
@@ -453,10 +483,11 @@ int main(int argc, char** argv)
                     speedIdx = std::max(speedIdx - 1, 0);
                     break;
                 case sf::Keyboard::Key::Period:
-                    if (paused)
+                    if (paused && !timeline.reviewing())
                     {
                         sim.step(cfg::FIXED_DT);
                         history.update(sim, cfg::FIXED_DT);
+                        timeline.record(sim);
                     }
                     break;
                 case sf::Keyboard::Key::V:
@@ -495,14 +526,15 @@ int main(int argc, char** argv)
                 case sf::Keyboard::Key::R:
                     sim.reset();
                     history.reset();
+                    timeline.reset();
                     selection.clear();
                     break;
                 case sf::Keyboard::Key::S:
                 {
                     const std::string path = SaveState::askSavePath();
                     if (!path.empty())
-                        setStatus(SaveState::save(sim, path)
-                                      ? "state saved"
+                        setStatus(SaveState::save(sim, timeline, history, path)
+                                      ? "state saved (with history)"
                                       : "save FAILED - could not write file");
                     break;
                 }
@@ -511,11 +543,10 @@ int main(int argc, char** argv)
                     const std::string path = SaveState::askOpenPath();
                     if (!path.empty())
                     {
-                        if (SaveState::load(sim, path))
+                        if (SaveState::load(sim, timeline, history, path))
                         {
-                            history.reset();      // charts restart at the loaded time
-                            selection.clear();
-                            setStatus("state loaded");
+                            selection.clear();    // timeline + charts come from the file
+                            setStatus("state loaded (with history)");
                         }
                         else
                             setStatus("load FAILED - not a valid save file");
@@ -539,7 +570,11 @@ int main(int argc, char** argv)
                 if (mb->button == sf::Mouse::Button::Left)
                 {
                     Leaderboard::Click lc;
-                    if (tuning.onMousePressed(pix))
+                    if (timeline.onPress(pix, sim))
+                    {
+                        // grabbed the timeline scrubber (entered review)
+                    }
+                    else if (tuning.onMousePressed(pix))
                     {
                         // sliders ate the click
                     }
@@ -583,20 +618,28 @@ int main(int argc, char** argv)
             }
 
             else if (const auto* mm = event->getIf<sf::Event::MouseMoved>())
-                tuning.onMouseMoved({ float(mm->position.x), float(mm->position.y) });
+            {
+                const sf::Vector2f mp(float(mm->position.x), float(mm->position.y));
+                tuning.onMouseMoved(mp);
+                timeline.onDrag(mp, sim);
+            }
 
             else if (event->is<sf::Event::MouseButtonReleased>())
+            {
                 tuning.onMouseReleased();
+                timeline.onRelease();
+            }
         }
 
-        // ----- simulate -----
-        if (!paused)
+        // ----- simulate ----- (suspended while reviewing the past)
+        if (!paused && !timeline.reviewing())
         {
             const int steps = cfg::SPEED_STEPS[speedIdx];
             for (int i = 0; i < steps; ++i)
             {
                 sim.step(cfg::FIXED_DT);
                 history.update(sim, cfg::FIXED_DT);
+                timeline.record(sim);
             }
         }
 
@@ -730,9 +773,10 @@ int main(int argc, char** argv)
             }
         }
 
+        const float markerT = timeline.reviewing() ? timeline.viewedTime() : -1.f;
         drawPanel(window, sim, history, hasFont ? &font : nullptr,
                   paused, cfg::SPEED_STEPS[speedIdx], showVision, tuning.visible,
-                  lineageColor, chartsTop, status);
+                  lineageColor, chartsTop, markerT, status);
 
         if (selected)
             BrainView::draw(window, brainViewPos, *selected, selection.isPred,
@@ -740,6 +784,7 @@ int main(int argc, char** argv)
 
         leaderboard.draw(window, hasFont ? &font : nullptr, selection.id);
         tuning.draw(window, hasFont ? &font : nullptr);
+        timeline.draw(window, hasFont ? &font : nullptr, sim.time());
 
         window.display();
     }

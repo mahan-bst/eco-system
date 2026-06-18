@@ -434,10 +434,12 @@ namespace
     constexpr int  SAVE_VERSION_MIN = 2;
     constexpr int  SAVE_VERSION_MAX = 5;
 
+    // append raw bytes to a string buffer — much faster than std::ostream's
+    // per-write virtual-call overhead, which is what made snapshots lag
     template <class T>
-    void wr(std::ostream& out, const T& v)
+    void wr(std::string& out, const T& v)
     {
-        out.write(reinterpret_cast<const char*>(&v), sizeof v);
+        out.append(reinterpret_cast<const char*>(&v), sizeof v);
     }
 
     template <class T>
@@ -447,7 +449,7 @@ namespace
         return bool(in);
     }
 
-    void writeAnimal(std::ostream& out, const Animal& a)
+    void writeAnimal(std::string& out, const Animal& a)
     {
         wr(out, a.id);
         wr(out, a.pos.x); wr(out, a.pos.y);
@@ -458,7 +460,10 @@ namespace
         wr(out, std::int32_t(a.offspring));
         wr(out, a.brain.memory()[0]);
         wr(out, a.brain.memory()[1]);
-        for (float w : a.brain.weights()) wr(out, w);
+        // the weights are the bulk — append them in one block, not per float
+        const auto& w = a.brain.weights();
+        out.append(reinterpret_cast<const char*>(w.data()),
+                   w.size() * sizeof(float));
     }
 
     bool readAnimal(std::istream& in, Animal& a, int version)
@@ -502,9 +507,15 @@ namespace
     }
 }
 
-void Simulation::serialize(std::ostream& out) const
+std::string Simulation::snapshot() const
 {
-    out.write(SAVE_MAGIC, sizeof SAVE_MAGIC);
+    std::string out;
+    const std::size_t perAnimal = 11 * sizeof(float) +
+                                  std::size_t(Brain::paramCount()) * sizeof(float);
+    out.reserve(256 + m_food.size() * 8 +
+                (m_prey.size() + m_pred.size()) * perAnimal + 4096);
+
+    out.append(SAVE_MAGIC, sizeof SAVE_MAGIC);
     wr(out, std::uint32_t(Brain::paramCount()));
 
     wr(out, cfg::tune.foodPerSec);
@@ -536,6 +547,13 @@ void Simulation::serialize(std::ostream& out) const
 
     m_preyHof.serialize(out);
     m_predHof.serialize(out);
+    return out;
+}
+
+void Simulation::serialize(std::ostream& out) const
+{
+    const std::string blob = snapshot();
+    out.write(blob.data(), std::streamsize(blob.size()));
 }
 
 bool Simulation::deserialize(std::istream& in)

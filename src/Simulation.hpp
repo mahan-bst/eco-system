@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <iosfwd>
+#include <string>
 #include <vector>
 
 #include "Champions.hpp"
@@ -29,6 +30,11 @@ public:
     // and the live tunables. deserialize leaves the sim untouched on failure.
     void serialize(std::ostream& out) const;
     bool deserialize(std::istream& in);
+
+    // Fast in-memory serialization (raw string buffer, no stream overhead).
+    // The Timeline calls this every snapshot, so it must stay cheap; serialize()
+    // above just writes this blob to the stream.
+    std::string snapshot() const;
 
     float time() const { return m_time; }
     const std::vector<Food>&   foodList() const { return m_food; }

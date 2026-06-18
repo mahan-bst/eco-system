@@ -11,8 +11,8 @@
 // default, or -j N), with no window/rendering/chart sampling, as fast as the
 // CPU allows — best-of-N evolution that actually uses all your cores. Each
 // world is saved to its own numbered .eco file (the base name with _<index>
-// inserted), and the scoreboard tells you which is the best. Open any of them
-// in the GUI with `O`.
+// inserted) including its recorded timeline, and the scoreboard tells you which
+// is the best. Open any of them in the GUI with `O` and scrub their evolution.
 namespace Headless
 {
     // Returns an exit code (0/1) if this was a --train invocation and it ran;

@@ -3,7 +3,9 @@
 #include <fstream>
 #include <iostream>
 
+#include "History.hpp"
 #include "Simulation.hpp"
+#include "Timeline.hpp"
 
 #ifdef _WIN32
     #define WIN32_LEAN_AND_MEAN
@@ -53,17 +55,24 @@ namespace
 std::string SaveState::askSavePath() { return dialog(true); }
 std::string SaveState::askOpenPath() { return dialog(false); }
 
-bool SaveState::save(const Simulation& sim, const std::string& path)
+bool SaveState::save(const Simulation& sim, const Timeline& timeline,
+                     const History& history, const std::string& path)
 {
     std::ofstream f(path, std::ios::binary);
     if (!f) return false;
-    sim.serialize(f);
+    sim.serialize(f);           // the world
+    timeline.serialize(f);      // the scrubbable snapshots
+    history.serialize(f);       // the chart series
     return bool(f);
 }
 
-bool SaveState::load(Simulation& sim, const std::string& path)
+bool SaveState::load(Simulation& sim, Timeline& timeline,
+                     History& history, const std::string& path)
 {
     std::ifstream f(path, std::ios::binary);
     if (!f) return false;
-    return sim.deserialize(f);
+    if (!sim.deserialize(f)) return false;
+    timeline.deserialize(f);    // optional: absent in older files -> empty
+    history.deserialize(f);     // optional: absent in older files -> empty
+    return true;
 }
