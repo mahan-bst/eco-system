@@ -358,6 +358,7 @@ ChampionArchive& Simulation::hofFor(const cfg::SpeciesCfg& s)
 void Simulation::topUp(std::vector<Animal>& pop, const cfg::SpeciesCfg& s,
                        int floor, const ChampionArchive& archive)
 {
+    if (!cfg::tune.floorRefill) return;         // immigration disabled (checkbox)
     const std::size_t survivors = pop.size();   // pick parents from these only
     while (int(pop.size()) < floor)
     {

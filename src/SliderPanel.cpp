@@ -30,6 +30,11 @@ void SliderPanel::add(const char* name, float* value, float lo, float hi, const 
     m_sliders.push_back({ name, value, lo, hi, fmt });
 }
 
+void SliderPanel::addCheck(const char* name, bool* value)
+{
+    m_checks.push_back({ name, value });
+}
+
 float SliderPanel::width() const
 {
     return PAD + LABEL_W + TRACK_W + 10.f + VALUE_W + PAD;
@@ -37,7 +42,15 @@ float SliderPanel::width() const
 
 float SliderPanel::height() const
 {
-    return TITLE_H + ROW_H * float(m_sliders.size()) + PAD;
+    return TITLE_H + ROW_H * float(m_sliders.size() + m_checks.size()) + PAD;
+}
+
+sf::FloatRect SliderPanel::checkBoxRect(std::size_t i) const
+{
+    constexpr float BOX = 16.f;
+    const float rowTop = m_pos.y + TITLE_H +
+                         ROW_H * float(m_sliders.size() + i);
+    return { { m_pos.x + PAD, rowTop + (ROW_H - BOX) / 2.f }, { BOX, BOX } };
 }
 
 sf::FloatRect SliderPanel::trackRect(std::size_t i) const
@@ -70,6 +83,17 @@ bool SliderPanel::onMousePressed(sf::Vector2f p)
         {
             m_active = int(i);
             applyDrag(i, p.x);
+            break;
+        }
+    }
+
+    // checkboxes: click the box or its label row to toggle
+    for (std::size_t i = 0; i < m_checks.size(); ++i)
+    {
+        const sf::FloatRect box = checkBoxRect(i);
+        if (p.y >= box.position.y - 4.f && p.y <= box.position.y + box.size.y + 4.f)
+        {
+            *m_checks[i].value = !*m_checks[i].value;
             break;
         }
     }
@@ -132,5 +156,33 @@ void SliderPanel::draw(sf::RenderTarget& rt, const sf::Font* font) const
                              { t.position.x + t.size.x + 14.f, rowTop + 8.f },
                              sf::Color(214, 224, 234)));
         }
+    }
+
+    // checkboxes
+    for (std::size_t i = 0; i < m_checks.size(); ++i)
+    {
+        const Check& c = m_checks[i];
+        const sf::FloatRect box = checkBoxRect(i);
+        const bool on = *c.value;
+
+        sf::RectangleShape b(box.size);
+        b.setPosition(box.position);
+        b.setFillColor(on ? sf::Color(96, 196, 208) : sf::Color(40, 50, 60));
+        b.setOutlineColor(sf::Color(90, 104, 118));
+        b.setOutlineThickness(1.f);
+        rt.draw(b);
+
+        if (on)   // checkmark = a smaller filled inner square
+        {
+            sf::RectangleShape tick({ box.size.x - 8.f, box.size.y - 8.f });
+            tick.setPosition({ box.position.x + 4.f, box.position.y + 4.f });
+            tick.setFillColor(sf::Color(15, 20, 26));
+            rt.draw(tick);
+        }
+
+        if (font)
+            rt.draw(makeText(*font, c.name, 12,
+                             { box.position.x + box.size.x + 10.f, box.position.y + 1.f },
+                             sf::Color(168, 180, 192)));
     }
 }

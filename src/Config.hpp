@@ -151,6 +151,7 @@ namespace cfg
         float preySpeed     = PREY.maxSpeed;   // px/s at full throttle
         float predVision    = PRED.vision;
         float predSpeed     = PRED.maxSpeed;
+        bool  floorRefill   = true;   // immigration: respawn when a species is few
     };
     inline Tunables tune;
 

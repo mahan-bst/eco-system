@@ -396,6 +396,7 @@ int main(int argc, char** argv)
     tuning.add("prey speed",  &cfg::tune.preySpeed,    30.f, 180.f,  "%.0f");
     tuning.add("pred vision", &cfg::tune.predVision,   30.f, 250.f,  "%.0f");
     tuning.add("pred speed",  &cfg::tune.predSpeed,    30.f, 180.f,  "%.0f");
+    tuning.addCheck("floor refill (immigration)", &cfg::tune.floorRefill);
     // the tool panels (brain view / leaderboard / sliders) dock into the
     // right-hand column below the header; their positions are laid out each
     // frame depending on which ones are open (see the layout block in the loop)

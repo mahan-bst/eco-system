@@ -9,6 +9,7 @@ class SliderPanel
 {
 public:
     void add(const char* name, float* value, float lo, float hi, const char* fmt);
+    void addCheck(const char* name, bool* value);   // checkbox row
     void setPosition(sf::Vector2f pos) { m_pos = pos; }
 
     float width() const;
@@ -33,10 +34,18 @@ private:
         const char* fmt;   // printf format for the value label
     };
 
+    struct Check
+    {
+        const char* name;
+        bool* value;
+    };
+
     sf::FloatRect trackRect(std::size_t i) const;
+    sf::FloatRect checkBoxRect(std::size_t i) const;   // checkbox i lives below the sliders
     void applyDrag(std::size_t i, float x);
 
     std::vector<Slider> m_sliders;
+    std::vector<Check>  m_checks;
     sf::Vector2f m_pos;
     int m_active = -1;     // slider currently being dragged
 };
