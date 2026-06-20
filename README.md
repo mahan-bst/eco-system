@@ -6,6 +6,8 @@ and there are no behaviour rules: every creature is driven by its own small
 food (or catch prey) reproduce; brains that don't, starve. Natural selection
 does the programming.
 
+![EcoSim running — teal prey foraging, red predators hunting](docs/img/hero.gif)
+
 ## The rules
 
 | | Prey (teal circles) | Predators (red triangles) |
@@ -14,7 +16,7 @@ does the programming.
 | Body | identical for every individual (speed, vision, size are species constants) | same |
 | Brain | its own neural net — the **only** thing that is inherited and mutated | same |
 | Death | energy reaches 0 (prey can also be eaten) | energy reaches 0 |
-| Reproduction | solo, at ≥ 80 % of energy capacity; the child gets 40 % of the parent's energy and a mutated copy of its brain | same |
+| Reproduction | solo, at a high fraction of energy capacity (72 % prey / 82 % predator); the child gets 40 % of the parent's energy and a mutated copy of its brain | same |
 
 Energy drains constantly (`base + moveCost · throttle²`), so both standing
 still forever and sprinting blindly are losing strategies — the network has
@@ -52,9 +54,9 @@ brain works identically anywhere on the map:
 | 12–13 | memory 1 / 2 | the brain's own memory outputs from the previous tick |
 | | **Outputs** | **turn** (−1..1), **throttle** (0..1), and **memory 1 / 2** (fed back as inputs next tick — short-term state) |
 
-Mutation adds gaussian noise to every weight, plus a 2 % chance per weight of
-a complete rewire. Children start with a blank memory. There is no crossover
-and no back-propagation — pure selection.
+Mutation adds gaussian noise to every weight, plus a small chance per weight
+(~0.5 %) of a complete rewire. Children start with a blank memory. There is no
+crossover and no back-propagation — pure selection.
 
 ## The brain viewer
 
@@ -64,6 +66,16 @@ and connection brightness shows the signal flowing through each synapse
 *this tick* — you can literally watch a predator's "prey" inputs light up
 and propagate into a hard turn. The selected creature is marked in the world
 with a white ring and its vision circle. Click empty space to deselect.
+
+![Brain viewer — a predator's network, prey inputs lit and propagating into a turn](docs/img/brain.png)
+
+Below the diagram a **short-term memory** readout decodes the two recurrent
+channels: for each one it reports how many hidden neurons read and write it,
+which sensory inputs end up *stored* in it, and which motor output it ends up
+*steering* — so you can see at a glance what the creature is remembering and
+what it does with the memory.
+
+![Short-term memory readout — what each memory channel stores and steers](docs/img/memory.png)
 
 ## Controls
 
@@ -139,6 +151,8 @@ files are rejected as incompatible rather than loaded wrong.
 
 The right panel records the whole run (the sample buffer compacts itself, so
 even hour-long runs fit):
+
+![Population and average energy / lifespan charts over a run](docs/img/charts.png)
 
 1. **Population** — prey / predator / food counts. Expect noisy randomness
    early, then Lotka–Volterra-style oscillations once brains get competent.

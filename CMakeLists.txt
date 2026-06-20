@@ -5,7 +5,12 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(SFML_STATIC_LIBRARIES TRUE)
-set(SFML_DIR "D:/libs/SFML-3.1.0/lib/cmake/SFML")
+
+# Where your static SFML 3 lives. Override on the command line without editing
+# this file:  cmake -B build -DSFML_DIR=/path/to/SFML/lib/cmake/SFML
+if(NOT DEFINED SFML_DIR)
+    set(SFML_DIR "D:/libs/SFML-3.1.0/lib/cmake/SFML")
+endif()
 
 add_executable(MyGame
     src/main.cpp

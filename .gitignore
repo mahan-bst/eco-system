@@ -1,2 +1,5 @@
 .vscode/
 build/
+
+# generated worlds / training output
+*.eco
