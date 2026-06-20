@@ -155,4 +155,68 @@ void BrainView::draw(sf::RenderTarget& rt, sf::Vector2f pos, const Animal& a,
                              sf::Color(190, 200, 210)));
         }
     }
+
+    // ----- short-term memory readout ------------------------------------------
+    // Turns the amber wiring into plain language: for each memory channel, how
+    // many hidden neurons read it / write it, which sensory inputs end up stored
+    // in it, and which motor output it ends up steering. Computed from the
+    // weights (the fixed wiring), not this tick's signal, so the readout is
+    // stable while you watch the creature move.
+    if (font)
+    {
+        const sf::Color MEM(255, 196, 84);
+        const float secY = pos.y + 414.f;
+        rt.draw(makeText(*font, "SHORT-TERM MEMORY", 12,
+                         { pos.x + 12.f, secY }, MEM));
+
+        for (int k = 0; k < 2; ++k)
+        {
+            const int inIdx  = Brain::IN - 2 + k;   // memory input  12 / 13
+            const int outIdx = 2 + k;               // memory output  2 /  3
+
+            int readN = 0, writeN = 0;
+            float stored[Brain::IN] = {};
+            float drives[2] = {};   // 0 = turn, 1 = speed
+            for (int h = 0; h < Brain::HID; ++h)
+            {
+                const float wRead  = std::abs(b.w1(h, inIdx));     // mem -> hidden
+                const float wWrite = std::abs(b.w2(outIdx, h));    // hidden -> mem
+                if (wRead  > 0.15f) ++readN;
+                if (wWrite > 0.15f) ++writeN;
+
+                // stored: sensory inputs feeding the neurons that WRITE this channel
+                for (int i = 0; i < Brain::IN - 2; ++i)            // skip mem inputs
+                    stored[i] += wWrite * std::abs(b.w1(h, i));
+                // steered: motor outputs driven by neurons that READ this channel
+                drives[0] += wRead * std::abs(b.w2(0, h));
+                drives[1] += wRead * std::abs(b.w2(1, h));
+            }
+
+            int best1 = 0, best2 = 1;
+            for (int i = 0; i < Brain::IN - 2; ++i)
+            {
+                if (stored[i] > stored[best1]) { best2 = best1; best1 = i; }
+                else if (i != best1 && stored[i] > stored[best2]) best2 = i;
+            }
+
+            char buf[128];
+            const float base = secY + 20.f + float(k) * 50.f;
+
+            std::snprintf(buf, sizeof(buf),
+                          "mem %d   reads %d hidden / writes %d hidden",
+                          k + 1, readN, writeN);
+            rt.draw(makeText(*font, buf, 12, { pos.x + 12.f, base },
+                             sf::Color(214, 224, 234)));
+
+            std::snprintf(buf, sizeof(buf), "stores: %s, %s",
+                          inputNames[best1], inputNames[best2]);
+            rt.draw(makeText(*font, buf, 11, { pos.x + 22.f, base + 16.f },
+                             sf::Color(168, 180, 192)));
+
+            std::snprintf(buf, sizeof(buf), "steers: %s",
+                          drives[0] >= drives[1] ? "turn" : "speed");
+            rt.draw(makeText(*font, buf, 11, { pos.x + 22.f, base + 31.f },
+                             sf::Color(168, 180, 192)));
+        }
+    }
 }

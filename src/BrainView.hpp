@@ -10,7 +10,7 @@
 namespace BrainView
 {
     constexpr float WIDTH  = 440.f;
-    constexpr float HEIGHT = 420.f;
+    constexpr float HEIGHT = 548.f;   // graph + short-term-memory readout
 
     inline sf::FloatRect bounds(sf::Vector2f pos)
     {

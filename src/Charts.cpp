@@ -67,27 +67,40 @@ void drawChart(sf::RenderTarget& rt, const sf::FloatRect& rect, const char* titl
 
     if (samples.size() < 2) return;
 
+    const std::size_t n = samples.size();
+
+    // centred moving average to tame the per-sample noise
+    constexpr int SMOOTH_R = 4;   // window = 2*R+1 samples
+    const auto smoothAt = [&](float Sample::*m, std::size_t i) -> float
+    {
+        const std::size_t a = i > std::size_t(SMOOTH_R) ? i - SMOOTH_R : 0;
+        const std::size_t b = std::min(n - 1, i + SMOOTH_R);
+        float sum = 0.f;
+        for (std::size_t k = a; k <= b; ++k) sum += samples[k].*m;
+        return sum / float(b - a + 1);
+    };
+
     // shared scale (population chart): one 0-based axis for all series
     float sharedMin = 0.f, sharedMax = 1.f;
     if (sharedScale)
     {
         for (const auto& s : series)
-            for (const auto& smp : samples)
-                sharedMax = std::max(sharedMax, smp.*(s.member));
+            for (std::size_t i = 0; i < n; ++i)
+                sharedMax = std::max(sharedMax, smoothAt(s.member, i));
         sharedMax *= 1.05f;
     }
 
-    const std::size_t n = samples.size();
     for (const auto& s : series)
     {
         float lo = sharedMin, hi = sharedMax;
         if (!sharedScale)
         {
             lo = 1e18f; hi = -1e18f;
-            for (const auto& smp : samples)
+            for (std::size_t i = 0; i < n; ++i)
             {
-                lo = std::min(lo, smp.*(s.member));
-                hi = std::max(hi, smp.*(s.member));
+                const float v = smoothAt(s.member, i);
+                lo = std::min(lo, v);
+                hi = std::max(hi, v);
             }
             const float pad = std::max((hi - lo) * 0.08f, 0.5f);
             lo -= pad; hi += pad;
@@ -100,7 +113,7 @@ void drawChart(sf::RenderTarget& rt, const sf::FloatRect& rect, const char* titl
             const float x = plot.position.x +
                             plot.size.x * (n > 1 ? float(i) / float(n - 1) : 0.f);
             const float y = plot.position.y + plot.size.y *
-                            (1.f - (samples[i].*(s.member) - lo) / range);
+                            (1.f - (smoothAt(s.member, i) - lo) / range);
             strip[i] = sf::Vertex{ { x, y }, s.color };
         }
         rt.draw(strip);
